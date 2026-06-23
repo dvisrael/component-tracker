@@ -25,8 +25,8 @@ const nowIso = ()=> new Date().toISOString();
 const daysAgoIso = (n)=>{ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString(); };
 const SAMPLE = {
   sealant:{ firstDate: daysAgoIso(78), cycleCount:1, lastDate: daysAgoIso(52), lastTopUpMl:50 },
-  wax:{ resetDate: daysAgoIso(21), manualKm:268, method:'Drip', syncAnchor: nowIso() },
-  chain:{ installDate: daysAgoIso(132), manualKm:540, lastCheckKm:0, syncAnchor: nowIso() },
+  wax:{ resetDate: daysAgoIso(21), adjustKm:268, method:'Drip' },
+  chain:{ installDate: daysAgoIso(132), adjustKm:540, lastCheckKm:0 },
 };
 
 const KEYS = { sealant:'chain:sealant_v2', wax:'chain:wax_reset', chain:'chain:chain_install', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache' };
@@ -146,6 +146,7 @@ const editBtns = (onCancel,onSave,saveLabel='Save') => (
 const cardTitle = (t) => <div style={{fontSize:'17px',fontWeight:600,letterSpacing:'-0.01em',color:'var(--text)'}}>{t}</div>;
 const cardSub = (t) => <div style={{fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.18em',color:'var(--faint)',textTransform:'uppercase',marginTop:'5px'}}>{t}</div>;
 
+const editHint = {fontFamily:'var(--mono)',fontSize:'9.5px',color:'var(--faint)',marginTop:'9px',lineHeight:1.7};
 const settingsLabel = {fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.18em',color:'var(--faint)',textTransform:'uppercase',marginBottom:'12px'};
 const segGroup = {display:'flex',border:'1px solid var(--line)',borderRadius:'var(--radius)',overflow:'hidden'};
 const GearIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
@@ -162,9 +163,11 @@ function App(){
   const patch = (p)=> setS(prev=> ({...prev, ...(typeof p==='function'?p(prev):p)}));
   const toastTimer = useRef(null);
 
-  // normalise older / sample shapes to the manualKm + syncAnchor model
-  const normWax = (w)=>{ if(!w) return null; if(w.manualKm===undefined){ return {resetDate:w.resetDate||nowIso(), manualKm:(w.km||0), method:w.method||'Drip', syncAnchor:nowIso()}; } return w; };
-  const normChain = (c)=>{ if(!c) return null; if(c.manualKm===undefined){ return {installDate:c.installDate||nowIso(), manualKm:(c.totalKm||0), lastCheckKm:(c.lastCheckKm||0), syncAnchor:nowIso()}; } return c; };
+  // Distance = adjustKm + (Garmin rides since the install/wax date). Normalise any
+  // earlier shape (raw km totals, or the old manualKm+syncAnchor) to adjustKm:0 so
+  // the counter becomes Garmin-driven from the stored date.
+  const normWax = (w)=>{ if(!w) return null; if(w.adjustKm===undefined){ return {resetDate:w.resetDate||nowIso(), adjustKm:0, method:w.method||'Drip'}; } return w; };
+  const normChain = (c)=>{ if(!c) return null; if(c.adjustKm===undefined){ return {installDate:c.installDate||nowIso(), adjustKm:0, lastCheckKm:(c.lastCheckKm||0)}; } return c; };
 
   // initial load + sample seed + ride cache
   useEffect(()=>{
@@ -252,15 +255,15 @@ function App(){
 
   /* ── wax actions ── */
   const openWaxMethod = ()=> patch({modal:{kind:'wax-method'}});
-  const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,manualKm:0,method,syncAnchor:now}; patch({waxData:fresh,modal:null}); persist(KEYS.wax,fresh); toast(`Wax replaced (${method}) — counter reset`); };
-  const openEditWax = ()=>{ const wd=s.waxData; const cur=(wd?wd.manualKm+ridesSince(wd.syncAnchor):0); patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(cur))), method: wd?.method||'Drip' }, flip:'wax' }); };
-  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const km=fromDisp(f.km); const updated={ resetDate:iso, manualKm:isNaN(km)?0:km, method:f.method, syncAnchor:nowIso() }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
+  const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,adjustKm:0,method}; patch({waxData:fresh,modal:null}); persist(KEYS.wax,fresh); toast(`Wax replaced (${method}) — counter reset`); };
+  const openEditWax = ()=>{ const wd=s.waxData; patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(wd?.adjustKm||0))), method: wd?.method||'Drip' }, flip:'wax' }); };
+  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
 
   /* ── chain actions ── */
-  const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,manualKm:0,lastCheckKm:0,syncAnchor:now}; patch({chainData:fresh,flip:null}); persist(KEYS.chain,fresh); toast('New chain — lifetime counter started'); };
-  const checkChain = ()=>{ const cd=s.chainData; if(!cd) return; const ck=cd.manualKm+ridesSince(cd.syncAnchor); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; patch({chainData:updated}); persist(KEYS.chain,updated); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
-  const openEditChain = ()=>{ const cd=s.chainData; const cur=(cd?cd.manualKm+ridesSince(cd.syncAnchor):0); patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cur))) }, flip:'chain' }); };
-  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const km=fromDisp(f.km); const updated={ installDate:iso, manualKm:isNaN(km)?0:km, lastCheckKm:s.chainData?.lastCheckKm||0, syncAnchor:nowIso() }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
+  const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,adjustKm:0,lastCheckKm:0}; patch({chainData:fresh,flip:null}); persist(KEYS.chain,fresh); toast('New chain — lifetime counter started'); };
+  const checkChain = ()=>{ const cd=s.chainData; if(!cd) return; const ck=(cd.adjustKm||0)+ridesSince(cd.installDate); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; patch({chainData:updated}); persist(KEYS.chain,updated); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
+  const openEditChain = ()=>{ const cd=s.chainData; patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cd?.adjustKm||0))) }, flip:'chain' }); };
+  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:s.chainData?.lastCheckKm||0 }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
 
   /* ── computed values ── */
   // sealant
@@ -279,7 +282,7 @@ function App(){
 
   // wax
   const wd=s.waxData;
-  const waxKm=wd?(wd.manualKm+ridesSince(wd.syncAnchor)):0;
+  const waxKm=wd?((wd.adjustKm||0)+ridesSince(wd.resetDate)):0;
   const waxOverdue=waxKm>=300, waxUrgent=waxKm>=250&&waxKm<300;
   const waxStatus=waxOverdue?'danger':waxUrgent?'warn':'healthy';
   const waxColor=waxStatus==='healthy'?'var(--accent)':waxStatus==='warn'?'var(--warn)':'var(--danger)';
@@ -287,7 +290,7 @@ function App(){
 
   // chain
   const cd=s.chainData;
-  const chainKm=cd?(cd.manualKm+ridesSince(cd.syncAnchor)):0;
+  const chainKm=cd?((cd.adjustKm||0)+ridesSince(cd.installDate)):0;
   const checkInterval=800;
   const lastCheck=Math.floor((cd?.lastCheckKm??0)/checkInterval)*checkInterval;
   const nextCheck=lastCheck+checkInterval;
@@ -300,6 +303,11 @@ function App(){
 
   // modal / form
   const modal=s.modal, kind=modal?.kind, f=s.form;
+  // Live preview for the edit forms: Garmin distance recorded since the chosen date.
+  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString()) : 0;
+  const formAdjDisp = parseFloat(f.km)||0;
+  const formTotalDisp = (toDisp(formGarminKm)+formAdjDisp).toFixed(0);
+  const formGarminDisp = toDisp(formGarminKm).toFixed(0);
   const modalMeta={
     'seal-ml':{title:nextAction==='TOP UP'?'Top Up Sealant':'Replace Sealant',sub:'How much did you add?'},
     'wax-method':{title:'Wax Method',sub:'How did you wax?'},
@@ -413,11 +421,12 @@ function App(){
                   <input type="date" value={f.date||''} onChange={e=>setForm('date',e.target.value)} style={dateInput} />
                 </div>
                 <div style={{marginBottom:'13px'}}>
-                  <div style={fieldLabel}>Distance ridden</div>
+                  <div style={fieldLabel}>Manual adjustment</div>
                   <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-                    <input type="number" min="0" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} style={numInput} />
+                    <input type="number" min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} style={numInput} />
                     <span style={{fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)'}}>{dispUnit}</span>
                   </div>
+                  <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since this date<br/>= {formTotalDisp} {dispUnit} since last wax</div>
                 </div>
                 <div style={{marginBottom:'18px'}}>
                   <div style={fieldLabel}>Method</div>
@@ -460,11 +469,12 @@ function App(){
                   <input type="date" value={f.date||''} onChange={e=>setForm('date',e.target.value)} style={dateInput} />
                 </div>
                 <div style={{marginBottom:'18px'}}>
-                  <div style={fieldLabel}>Lifetime distance</div>
+                  <div style={fieldLabel}>Manual adjustment</div>
                   <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-                    <input type="number" min="0" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} style={numInput} />
+                    <input type="number" min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} style={numInput} />
                     <span style={{fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)'}}>{dispUnit}</span>
                   </div>
+                  <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since install<br/>= {formTotalDisp} {dispUnit} lifetime</div>
                 </div>
                 <button className="replace-link" onClick={resetChain} style={{width:'100%',padding:'11px',marginBottom:'8px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'10.5px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Replace chain · reset lifetime</button>
                 {editBtns(cancelFlip, saveEditChain)}

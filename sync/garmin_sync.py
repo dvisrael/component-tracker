@@ -19,7 +19,7 @@ from garminconnect import Garmin
 
 ROOT       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RIDES_FILE = os.path.join(ROOT, "rides.json")
-LOOKBACK   = int(os.environ.get("LOOKBACK_DAYS", "120"))
+LOOKBACK   = int(os.environ.get("LOOKBACK_DAYS", "540"))
 
 # Garmin activityType.typeKey values that count as "riding the chain".
 def is_cycling(type_key: str) -> bool:
