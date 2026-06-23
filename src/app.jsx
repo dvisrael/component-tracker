@@ -29,7 +29,10 @@ const SAMPLE = {
   chain:{ installDate: daysAgoIso(132), adjustKm:540, lastCheckKm:0 },
 };
 
-const KEYS = { sealant:'chain:sealant_v2', wax:'chain:wax_reset', chain:'chain:chain_install', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache', ghToken:'chain:gh_token' };
+const KEYS = { sealant:'chain:sealant_v2', wax:'chain:wax_reset', chain:'chain:chain_install', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache', ghToken:'chain:gh_token', cards:'chain:cards' };
+
+const CARD_META = {sealant:'Sealant', wax:'Wax', chain:'Chain Wear'};
+const DEFAULT_CARDS = [{id:'sealant',visible:true},{id:'wax',visible:true},{id:'chain',visible:true}];
 
 /* ── Date / format helpers ─────────────────────────────────────── */
 const daysUntil = (iso)=> Math.floor((new Date(iso).getTime()-Date.now())/(864e5));
@@ -146,6 +149,16 @@ const editBtns = (onCancel,onSave,saveLabel='Save') => (
 const cardTitle = (t) => <div style={{fontSize:'17px',fontWeight:600,letterSpacing:'-0.01em',color:'var(--text)'}}>{t}</div>;
 const cardSub = (t) => <div style={{fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.18em',color:'var(--faint)',textTransform:'uppercase',marginTop:'5px'}}>{t}</div>;
 
+const Toggle = ({on,onChange})=>(
+  <div onClick={()=>onChange(!on)} role="switch" aria-checked={on}
+    style={{width:'42px',height:'24px',borderRadius:'12px',cursor:'pointer',flexShrink:0,userSelect:'none',
+      background:on?'var(--accent)':'var(--line)',position:'relative',transition:'background .2s'}}>
+    <div style={{position:'absolute',top:'3px',left:on?'21px':'3px',width:'18px',height:'18px',
+      borderRadius:'9px',background:on?'var(--accent-ink)':'var(--card)',
+      transition:'left .15s',boxShadow:'0 1px 3px rgba(0,0,0,.15)'}} />
+  </div>
+);
+
 const NumField = ({value,onChange,min,max,unit,fsize})=>(
   <div style={{position:'relative'}}>
     <input type="number" min={min} max={max} value={value} onChange={onChange} style={fsize?{...numInput,fontSize:fsize}:numInput} />
@@ -165,6 +178,7 @@ function App(){
     sealantData:null, waxData:null, chainData:null,
     theme:'light', direction:'editorial', units:'metric', view:'main',
     rides:[], ridesUpdated:null, syncing:false, githubToken:'',
+    cards: DEFAULT_CARDS,
     toast:null, modal:null, form:{}, flip:null,
   });
   const patch = (p)=> setS(prev=> ({...prev, ...(typeof p==='function'?p(prev):p)}));
@@ -193,6 +207,13 @@ function App(){
       units:     parse(g(KEYS.units))  || 'metric',
       rides: cache.rides||[], ridesUpdated: cache.updated||null,
       githubToken: parse(g(KEYS.ghToken)) || '',
+      cards: (()=>{
+        const raw = parse(g(KEYS.cards));
+        const valid = ['sealant','wax','chain'];
+        const stored = Array.isArray(raw) ? raw.filter(c=>valid.includes(c.id)) : [];
+        const missing = valid.filter(id=>!stored.find(c=>c.id===id));
+        return [...stored, ...missing.map(id=>({id,visible:true}))];
+      })(),
     });
     loadRides();
     const onVis=()=>{ if(document.visibilityState==='visible') loadRides(); };
@@ -230,6 +251,8 @@ function App(){
   const setDirection = (d)=>{ patch({direction:d}); persist(KEYS.dir,d); };
   const setUnits = (u)=>{ patch({units:u}); persist(KEYS.units,u); };
   const setGithubToken = (t)=>{ patch({githubToken:t}); persist(KEYS.ghToken,t); };
+  const moveCard = (idx,dir)=>{ const next=[...s.cards]; const to=idx+dir; if(to<0||to>=next.length) return; [next[idx],next[to]]=[next[to],next[idx]]; patch({cards:next}); persist(KEYS.cards,next); };
+  const toggleCardVisible = (id)=>{ const next=s.cards.map(c=>c.id===id?{...c,visible:!c.visible}:c); patch({cards:next}); persist(KEYS.cards,next); };
 
   function triggerSync(){
     const token = s.githubToken;
@@ -372,8 +395,11 @@ function App(){
         {isMain && (<React.Fragment>
         {/* CARDS */}
         <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+        {s.cards.filter(c=>c.visible).map(c=>(
+          <React.Fragment key={c.id}>
+          {c.id==='sealant' && (
 
-          {/* ===== SEALANT ===== */}
+          /* ===== SEALANT ===== */
           <div className="flip">
             <div className={flipCls('sealant')}>
               <section className="flip-front" style={cardStyle}>
@@ -423,8 +449,8 @@ function App(){
               </section>
             </div>
           </div>
-
-          {/* ===== WAX ===== */}
+          )}
+          {c.id==='wax' && (
           <div className="flip">
             <div className={flipCls('wax')}>
               <section className="flip-front" style={cardStyle}>
@@ -465,8 +491,8 @@ function App(){
               </section>
             </div>
           </div>
-
-          {/* ===== CHAIN ===== */}
+          )}
+          {c.id==='chain' && (
           <div className="flip">
             <div className={flipCls('chain')}>
               <section className="flip-front" style={cardStyle}>
@@ -505,7 +531,9 @@ function App(){
               </section>
             </div>
           </div>
-
+          )}
+          </React.Fragment>
+        ))}
         </div>
 
         {/* SYNC STATUS */}
@@ -535,6 +563,22 @@ function App(){
             <div style={segGroup}>
               {['metric','imperial'].map(u=> <Seg key={u} flex active={s.units===u} label={u} onClick={()=>setUnits(u)} />)}
             </div>
+          </div>
+          <div style={{padding:'19px 21px',borderBottom:'1px solid var(--line)'}}>
+            <div style={settingsLabel}>Cards</div>
+            {s.cards.map((c,i)=>(
+              <div key={c.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 0',
+                borderBottom:i<s.cards.length-1?'1px solid var(--line)':'none'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:'1px',flexShrink:0}}>
+                  <button onClick={()=>moveCard(i,-1)} disabled={i===0}
+                    style={{background:'none',border:'none',cursor:i===0?'default':'pointer',color:'var(--muted)',padding:'2px 5px',lineHeight:1,opacity:i===0?.2:1,fontSize:'13px'}}>↑</button>
+                  <button onClick={()=>moveCard(i,1)} disabled={i===s.cards.length-1}
+                    style={{background:'none',border:'none',cursor:i===s.cards.length-1?'default':'pointer',color:'var(--muted)',padding:'2px 5px',lineHeight:1,opacity:i===s.cards.length-1?.2:1,fontSize:'13px'}}>↓</button>
+                </div>
+                <span style={{flex:1,fontSize:'13px',fontWeight:500,color:c.visible?'var(--text)':'var(--faint)'}}>{CARD_META[c.id]}</span>
+                <Toggle on={c.visible} onChange={()=>toggleCardVisible(c.id)} />
+              </div>
+            ))}
           </div>
           <div style={{padding:'19px 21px'}}>
             <div style={settingsLabel}>Garmin</div>

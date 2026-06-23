@@ -141,8 +141,24 @@ const KEYS = {
   dir: 'chain:direction',
   units: 'chain:units',
   rides: 'chain:rides_cache',
-  ghToken: 'chain:gh_token'
+  ghToken: 'chain:gh_token',
+  cards: 'chain:cards'
 };
+const CARD_META = {
+  sealant: 'Sealant',
+  wax: 'Wax',
+  chain: 'Chain Wear'
+};
+const DEFAULT_CARDS = [{
+  id: 'sealant',
+  visible: true
+}, {
+  id: 'wax',
+  visible: true
+}, {
+  id: 'chain',
+  visible: true
+}];
 
 /* ── Date / format helpers ─────────────────────────────────────── */
 const daysUntil = iso => Math.floor((new Date(iso).getTime() - Date.now()) / 864e5);
@@ -589,6 +605,37 @@ const cardSub = t => /*#__PURE__*/React.createElement("div", {
     marginTop: '5px'
   }
 }, t);
+const Toggle = ({
+  on,
+  onChange
+}) => /*#__PURE__*/React.createElement("div", {
+  onClick: () => onChange(!on),
+  role: "switch",
+  "aria-checked": on,
+  style: {
+    width: '42px',
+    height: '24px',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    flexShrink: 0,
+    userSelect: 'none',
+    background: on ? 'var(--accent)' : 'var(--line)',
+    position: 'relative',
+    transition: 'background .2s'
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    position: 'absolute',
+    top: '3px',
+    left: on ? '21px' : '3px',
+    width: '18px',
+    height: '18px',
+    borderRadius: '9px',
+    background: on ? 'var(--accent-ink)' : 'var(--card)',
+    transition: 'left .15s',
+    boxShadow: '0 1px 3px rgba(0,0,0,.15)'
+  }
+}));
 const NumField = ({
   value,
   onChange,
@@ -691,6 +738,7 @@ function App() {
     ridesUpdated: null,
     syncing: false,
     githubToken: '',
+    cards: DEFAULT_CARDS,
     toast: null,
     modal: null,
     form: {},
@@ -761,7 +809,17 @@ function App() {
       units: parse(g(KEYS.units)) || 'metric',
       rides: cache.rides || [],
       ridesUpdated: cache.updated || null,
-      githubToken: parse(g(KEYS.ghToken)) || ''
+      githubToken: parse(g(KEYS.ghToken)) || '',
+      cards: (() => {
+        const raw = parse(g(KEYS.cards));
+        const valid = ['sealant', 'wax', 'chain'];
+        const stored = Array.isArray(raw) ? raw.filter(c => valid.includes(c.id)) : [];
+        const missing = valid.filter(id => !stored.find(c => c.id === id));
+        return [...stored, ...missing.map(id => ({
+          id,
+          visible: true
+        }))];
+      })()
     });
     loadRides();
     const onVis = () => {
@@ -853,6 +911,26 @@ function App() {
       githubToken: t
     });
     persist(KEYS.ghToken, t);
+  };
+  const moveCard = (idx, dir) => {
+    const next = [...s.cards];
+    const to = idx + dir;
+    if (to < 0 || to >= next.length) return;
+    [next[idx], next[to]] = [next[to], next[idx]];
+    patch({
+      cards: next
+    });
+    persist(KEYS.cards, next);
+  };
+  const toggleCardVisible = id => {
+    const next = s.cards.map(c => c.id === id ? {
+      ...c,
+      visible: !c.visible
+    } : c);
+    patch({
+      cards: next
+    });
+    persist(KEYS.cards, next);
   };
   function triggerSync() {
     const token = s.githubToken;
@@ -1277,7 +1355,12 @@ function App() {
       flexDirection: 'column',
       gap: '14px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, s.cards.filter(c => c.visible).map(c => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: c.id
+  }, c.id === 'sealant' &&
+  /*#__PURE__*/
+  /* ===== SEALANT ===== */
+  React.createElement("div", {
     className: "flip"
   }, /*#__PURE__*/React.createElement("div", {
     className: flipCls('sealant')
@@ -1400,7 +1483,7 @@ function App() {
     value: f.ml || '',
     onChange: e => setForm('ml', e.target.value),
     unit: volUnit
-  })), editBtns(cancelFlip, saveEditSeal)))), /*#__PURE__*/React.createElement("div", {
+  })), editBtns(cancelFlip, saveEditSeal)))), c.id === 'wax' && /*#__PURE__*/React.createElement("div", {
     className: "flip"
   }, /*#__PURE__*/React.createElement("div", {
     className: flipCls('wax')
@@ -1511,7 +1594,7 @@ function App() {
     active: f.method === m,
     label: m,
     onClick: () => setForm('method', m)
-  })))), editBtns(cancelFlip, saveEditWax)))), /*#__PURE__*/React.createElement("div", {
+  })))), editBtns(cancelFlip, saveEditWax)))), c.id === 'chain' && /*#__PURE__*/React.createElement("div", {
     className: "flip"
   }, /*#__PURE__*/React.createElement("div", {
     className: flipCls('chain')
@@ -1626,7 +1709,7 @@ function App() {
       textTransform: 'uppercase',
       cursor: 'pointer'
     }
-  }, "Replace chain · reset lifetime"), editBtns(cancelFlip, saveEditChain))))), /*#__PURE__*/React.createElement("div", {
+  }, "Replace chain · reset lifetime"), editBtns(cancelFlip, saveEditChain))))))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: '14px',
       textAlign: 'center'
@@ -1699,6 +1782,65 @@ function App() {
     active: s.units === u,
     label: u,
     onClick: () => setUnits(u)
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '19px 21px',
+      borderBottom: '1px solid var(--line)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: settingsLabel
+  }, "Cards"), s.cards.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '10px 0',
+      borderBottom: i < s.cards.length - 1 ? '1px solid var(--line)' : 'none'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '1px',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => moveCard(i, -1),
+    disabled: i === 0,
+    style: {
+      background: 'none',
+      border: 'none',
+      cursor: i === 0 ? 'default' : 'pointer',
+      color: 'var(--muted)',
+      padding: '2px 5px',
+      lineHeight: 1,
+      opacity: i === 0 ? .2 : 1,
+      fontSize: '13px'
+    }
+  }, "↑"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => moveCard(i, 1),
+    disabled: i === s.cards.length - 1,
+    style: {
+      background: 'none',
+      border: 'none',
+      cursor: i === s.cards.length - 1 ? 'default' : 'pointer',
+      color: 'var(--muted)',
+      padding: '2px 5px',
+      lineHeight: 1,
+      opacity: i === s.cards.length - 1 ? .2 : 1,
+      fontSize: '13px'
+    }
+  }, "↓")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: '13px',
+      fontWeight: 500,
+      color: c.visible ? 'var(--text)' : 'var(--faint)'
+    }
+  }, CARD_META[c.id]), /*#__PURE__*/React.createElement(Toggle, {
+    on: c.visible,
+    onChange: () => toggleCardVisible(c.id)
   })))), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '19px 21px'
