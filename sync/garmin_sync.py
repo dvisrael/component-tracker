@@ -9,10 +9,10 @@ Auth (set as repo secrets / env vars):
                                      (use tools/garmin_token.py to generate;
                                      required if your account has MFA enabled).
 Optional:
-  LOOKBACK_DAYS  (default 120)     — how far back to pull each run. Older rides
+  LOOKBACK_DAYS  (default 540)     — how far back to pull each run. Older rides
                                      already in rides.json are preserved.
 """
-import os, sys, json
+import os, sys, json, time
 from datetime import datetime, timedelta, timezone
 
 from garminconnect import Garmin
@@ -76,6 +76,20 @@ def parse_start(activity: dict) -> str | None:
     return None
 
 
+def get_bike_for_activity(g: Garmin, activity_id: str) -> tuple:
+    """Return (uuid, name) of the bike gear used in this activity, or ('', '')."""
+    try:
+        gear_list = g.get_activity_gear(activity_id) or []
+        for item in gear_list:
+            if (item.get("gearTypeName") or "").lower() == "bike":
+                uuid = item.get("uuid") or ""
+                name = item.get("customMakeModel") or item.get("displayName") or ""
+                return uuid, name
+    except Exception:
+        pass
+    return "", ""
+
+
 def fetch_rides(g: Garmin) -> dict:
     """Return {id: ride} for cycling activities within the lookback window."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=LOOKBACK)
@@ -103,6 +117,7 @@ def fetch_rides(g: Garmin) -> dict:
                 "km": round(dist_m / 1000.0, 3),
                 "name": a.get("activityName") or "",
                 "type": tk,
+                # gearId absent here — filled in below for rides missing it
             }
         if reached_old or len(activities) < batch:
             break
@@ -122,7 +137,25 @@ def main():
 
     g = login()
     fetched = fetch_rides(g)
-    merged.update(fetched)  # new data wins on id collision
+
+    # Merge new activity data; preserve gearId already fetched on existing rides.
+    for rid, new_ride in fetched.items():
+        if rid in merged and merged[rid].get("gearId") is not None:
+            new_ride["gearId"] = merged[rid]["gearId"]
+            new_ride["gearName"] = merged[rid].get("gearName", "")
+        merged[rid] = new_ride
+
+    # Fetch bike gear for rides that haven't been tagged yet.
+    # gearId absent (key missing) or None means "not yet looked up".
+    needs_gear = [ride for ride in merged.values() if ride.get("gearId") is None]
+    if needs_gear:
+        print(f"Fetching bike gear for {len(needs_gear)} ride(s)...")
+        for i, ride in enumerate(needs_gear):
+            gear_id, gear_name = get_bike_for_activity(g, ride["id"])
+            ride["gearId"] = gear_id   # '' = no bike found; non-empty = bike UUID
+            ride["gearName"] = gear_name
+            if i > 0 and i % 10 == 0:
+                time.sleep(0.5)        # gentle pacing for bulk backfill
 
     rides = sorted(merged.values(), key=lambda r: r["date"])
     payload = {
@@ -133,7 +166,10 @@ def main():
         json.dump(payload, f, indent=2)
         f.write("\n")
 
-    print(f"synced: {len(rides)} rides total ({len(rides) - before} new), lookback {LOOKBACK}d")
+    new_count = len(rides) - before
+    gear_tagged = sum(1 for r in rides if r.get("gearId"))
+    print(f"synced: {len(rides)} rides total ({new_count} new), "
+          f"{gear_tagged} with bike gear, lookback {LOOKBACK}d")
 
 
 if __name__ == "__main__":

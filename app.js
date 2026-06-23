@@ -7,7 +7,8 @@
 const {
   useState,
   useEffect,
-  useRef
+  useRef,
+  useMemo
 } = React;
 
 /* ── Theme presets ─────────────────────────────────────────────── */
@@ -142,7 +143,8 @@ const KEYS = {
   units: 'chain:units',
   rides: 'chain:rides_cache',
   ghToken: 'chain:gh_token',
-  cards: 'chain:cards'
+  cards: 'chain:cards',
+  bikes: 'chain:bikes'
 };
 const CARD_META = {
   sealant: 'Sealant',
@@ -690,6 +692,26 @@ const segGroup = {
   borderRadius: 'var(--radius)',
   overflow: 'hidden'
 };
+const BikePicker = ({
+  bikes,
+  value,
+  onChange
+}) => /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap'
+  }
+}, /*#__PURE__*/React.createElement(Chip, {
+  active: !value,
+  label: "All bikes",
+  onClick: () => onChange(null)
+}), bikes.map(b => /*#__PURE__*/React.createElement(Chip, {
+  key: b.id,
+  active: value === b.id,
+  label: b.name,
+  onClick: () => onChange(b.id)
+})));
 const GearIcon = () => /*#__PURE__*/React.createElement("svg", {
   width: "20",
   height: "20",
@@ -739,6 +761,7 @@ function App() {
     syncing: false,
     githubToken: '',
     cards: DEFAULT_CARDS,
+    bikes: [],
     toast: null,
     modal: null,
     form: {},
@@ -756,25 +779,27 @@ function App() {
   // the counter becomes Garmin-driven from the stored date.
   const normWax = w => {
     if (!w) return null;
-    if (w.adjustKm === undefined) {
-      return {
-        resetDate: w.resetDate || nowIso(),
-        adjustKm: 0,
-        method: w.method || 'Drip'
-      };
-    }
-    return w;
+    const base = w.adjustKm === undefined ? {
+      resetDate: w.resetDate || nowIso(),
+      adjustKm: 0,
+      method: w.method || 'Drip'
+    } : w;
+    return {
+      bikeId: null,
+      ...base
+    };
   };
   const normChain = c => {
     if (!c) return null;
-    if (c.adjustKm === undefined) {
-      return {
-        installDate: c.installDate || nowIso(),
-        adjustKm: 0,
-        lastCheckKm: c.lastCheckKm || 0
-      };
-    }
-    return c;
+    const base = c.adjustKm === undefined ? {
+      installDate: c.installDate || nowIso(),
+      adjustKm: 0,
+      lastCheckKm: c.lastCheckKm || 0
+    } : c;
+    return {
+      bikeId: null,
+      ...base
+    };
   };
 
   // initial load + sample seed + ride cache
@@ -810,6 +835,7 @@ function App() {
       rides: cache.rides || [],
       ridesUpdated: cache.updated || null,
       githubToken: parse(g(KEYS.ghToken)) || '',
+      bikes: parse(g(KEYS.bikes)) || [],
       cards: (() => {
         const raw = parse(g(KEYS.cards));
         const valid = ['sealant', 'wax', 'chain'];
@@ -912,6 +938,79 @@ function App() {
     });
     persist(KEYS.ghToken, t);
   };
+
+  // Unique (gearId, gearName) pairs seen in rides — used as options when adding a bike
+  const gearFromRides = useMemo(() => {
+    const seen = new Map();
+    for (const r of s.rides) {
+      if (r.gearId && !seen.has(r.gearId)) seen.set(r.gearId, r.gearName || r.gearId);
+    }
+    return [...seen.entries()].map(([gearId, gearName]) => ({
+      gearId,
+      gearName
+    }));
+  }, [s.rides]);
+  const saveBikes = list => {
+    patch({
+      bikes: list
+    });
+    persist(KEYS.bikes, list);
+  };
+  const addBike = (name, gearId, gearName) => {
+    const id = 'b_' + Date.now();
+    saveBikes([...s.bikes, {
+      id,
+      name: name.trim() || gearName,
+      garminGearId: gearId,
+      garminGearName: gearName
+    }]);
+  };
+  const deleteBike = id => {
+    saveBikes(s.bikes.filter(b => b.id !== id));
+    // unlink any components that referenced this bike
+    const uc = s.chainData?.bikeId === id ? {
+      ...s.chainData,
+      bikeId: null
+    } : s.chainData;
+    const uw = s.waxData?.bikeId === id ? {
+      ...s.waxData,
+      bikeId: null
+    } : s.waxData;
+    if (uc !== s.chainData) {
+      patch({
+        chainData: uc
+      });
+      persist(KEYS.chain, uc);
+    }
+    if (uw !== s.waxData) {
+      patch({
+        waxData: uw
+      });
+      persist(KEYS.wax, uw);
+    }
+  };
+  const openAddBike = () => patch({
+    form: {
+      bikeName: '',
+      bikeGearId: '',
+      bikeGearName: ''
+    },
+    modal: {
+      kind: 'add-bike'
+    }
+  });
+  const confirmAddBike = () => {
+    const f = s.form;
+    if (!f.bikeGearId) {
+      toast('Pick a bike from the list first', 'warn');
+      return;
+    }
+    addBike(f.bikeName, f.bikeGearId, f.bikeGearName);
+    patch({
+      modal: null
+    });
+    toast('Bike added');
+  };
   const moveCard = (idx, dir) => {
     const next = [...s.cards];
     const to = idx + dir;
@@ -997,14 +1096,18 @@ function App() {
     return imperial ? v.toFixed(1) : v.toFixed(0);
   };
 
-  // sum of ride distance (km) recorded at/after an anchor timestamp
-  const ridesSince = anchorIso => {
+  // sum of ride distance (km) recorded at/after an anchor timestamp.
+  // If garminGearId is provided, rides on a DIFFERENT known bike are excluded;
+  // rides with no gear data (gearId absent or '') are always included.
+  const ridesSince = (anchorIso, garminGearId) => {
     if (!anchorIso) return 0;
     const t = new Date(anchorIso).getTime();
     let sum = 0;
     for (const r of s.rides) {
       const rt = new Date(r.date).getTime();
-      if (!isNaN(rt) && rt >= t) sum += +r.km || 0;
+      if (isNaN(rt) || rt < t) continue;
+      if (garminGearId && r.gearId && r.gearId !== garminGearId) continue;
+      sum += +r.km || 0;
     }
     return sum;
   };
@@ -1122,7 +1225,8 @@ function App() {
     const fresh = {
       resetDate: now,
       adjustKm: 0,
-      method
+      method,
+      bikeId: s.waxData?.bikeId || null
     };
     patch({
       waxData: fresh,
@@ -1137,7 +1241,8 @@ function App() {
       form: {
         date: wd?.resetDate ? isoDay(wd.resetDate) : todayDay(),
         km: String(Math.round(toDisp(wd?.adjustKm || 0))),
-        method: wd?.method || 'Drip'
+        method: wd?.method || 'Drip',
+        bikeId: wd?.bikeId || null
       },
       flip: 'wax'
     });
@@ -1155,7 +1260,8 @@ function App() {
     const updated = {
       resetDate: iso,
       adjustKm: isNaN(adj) ? 0 : adj,
-      method: f.method
+      method: f.method,
+      bikeId: f.bikeId || null
     };
     patch({
       waxData: updated,
@@ -1171,7 +1277,8 @@ function App() {
     const fresh = {
       installDate: now,
       adjustKm: 0,
-      lastCheckKm: 0
+      lastCheckKm: 0,
+      bikeId: s.chainData?.bikeId || null
     };
     patch({
       chainData: fresh,
@@ -1183,7 +1290,8 @@ function App() {
   const checkChain = () => {
     const cd = s.chainData;
     if (!cd) return;
-    const ck = (cd.adjustKm || 0) + ridesSince(cd.installDate);
+    const chainBikeGear = (cd.bikeId ? s.bikes.find(b => b.id === cd.bikeId) : null)?.garminGearId || null;
+    const ck = (cd.adjustKm || 0) + ridesSince(cd.installDate, chainBikeGear);
     const cleared = Math.floor(ck / 800) * 800;
     const updated = {
       ...cd,
@@ -1200,7 +1308,8 @@ function App() {
     patch({
       form: {
         date: cd?.installDate ? isoDay(cd.installDate) : todayDay(),
-        km: String(Math.round(toDisp(cd?.adjustKm || 0)))
+        km: String(Math.round(toDisp(cd?.adjustKm || 0))),
+        bikeId: cd?.bikeId || null
       },
       flip: 'chain'
     });
@@ -1218,7 +1327,8 @@ function App() {
     const updated = {
       installDate: iso,
       adjustKm: isNaN(adj) ? 0 : adj,
-      lastCheckKm: s.chainData?.lastCheckKm || 0
+      lastCheckKm: s.chainData?.lastCheckKm || 0,
+      bikeId: f.bikeId || null
     };
     patch({
       chainData: updated,
@@ -1246,7 +1356,8 @@ function App() {
 
   // wax
   const wd = s.waxData;
-  const waxKm = wd ? (wd.adjustKm || 0) + ridesSince(wd.resetDate) : 0;
+  const waxBike = wd?.bikeId ? s.bikes.find(b => b.id === wd.bikeId) || null : null;
+  const waxKm = wd ? (wd.adjustKm || 0) + ridesSince(wd.resetDate, waxBike?.garminGearId || null) : 0;
   const waxOverdue = waxKm >= 300,
     waxUrgent = waxKm >= 250 && waxKm < 300;
   const waxStatus = waxOverdue ? 'danger' : waxUrgent ? 'warn' : 'healthy';
@@ -1255,7 +1366,8 @@ function App() {
 
   // chain
   const cd = s.chainData;
-  const chainKm = cd ? (cd.adjustKm || 0) + ridesSince(cd.installDate) : 0;
+  const chainBike = cd?.bikeId ? s.bikes.find(b => b.id === cd.bikeId) || null : null;
+  const chainKm = cd ? (cd.adjustKm || 0) + ridesSince(cd.installDate, chainBike?.garminGearId || null) : 0;
   const checkInterval = 800;
   const lastCheck = Math.floor((cd?.lastCheckKm ?? 0) / checkInterval) * checkInterval;
   const nextCheck = lastCheck + checkInterval;
@@ -1272,7 +1384,8 @@ function App() {
     kind = modal?.kind,
     f = s.form;
   // Live preview for the edit forms: Garmin distance recorded since the chosen date.
-  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString()) : 0;
+  const formBike = f.bikeId ? s.bikes.find(b => b.id === f.bikeId) || null : null;
+  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString(), formBike?.garminGearId || null) : 0;
   const formAdjDisp = parseFloat(f.km) || 0;
   const formTotalDisp = (toDisp(formGarminKm) + formAdjDisp).toFixed(0);
   const formGarminDisp = toDisp(formGarminKm).toFixed(0);
@@ -1284,6 +1397,10 @@ function App() {
     'wax-method': {
       title: 'Wax Method',
       sub: 'How did you wax?'
+    },
+    'add-bike': {
+      title: 'Add Bike',
+      sub: 'Name · Garmin gear'
     }
   }[kind] || {
     title: '',
@@ -1497,7 +1614,7 @@ function App() {
       alignItems: 'flex-start',
       gap: '12px'
     }
-  }, /*#__PURE__*/React.createElement("div", null, cardTitle('Wax'), cardSub(`Distance · ~${toDisp(300).toFixed(0)} ${dispUnit}`)), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, cardTitle('Wax'), cardSub(waxBike ? `${waxBike.name} · ~${toDisp(300).toFixed(0)} ${dispUnit}` : `Distance · ~${toDisp(300).toFixed(0)} ${dispUnit}`)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -1580,7 +1697,7 @@ function App() {
     style: editHint
   }, "+ ", formGarminDisp, " ", dispUnit, " ridden on Garmin since this date", /*#__PURE__*/React.createElement("br", null), "= ", formTotalDisp, " ", dispUnit, " since last wax")), /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: '18px'
+      marginBottom: '13px'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: fieldLabel
@@ -1594,7 +1711,17 @@ function App() {
     active: f.method === m,
     label: m,
     onClick: () => setForm('method', m)
-  })))), editBtns(cancelFlip, saveEditWax)))), c.id === 'chain' && /*#__PURE__*/React.createElement("div", {
+  })))), s.bikes.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '18px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: fieldLabel
+  }, "Bike"), /*#__PURE__*/React.createElement(BikePicker, {
+    bikes: s.bikes,
+    value: f.bikeId || null,
+    onChange: v => setForm('bikeId', v)
+  })), editBtns(cancelFlip, saveEditWax)))), c.id === 'chain' && /*#__PURE__*/React.createElement("div", {
     className: "flip"
   }, /*#__PURE__*/React.createElement("div", {
     className: flipCls('chain')
@@ -1608,7 +1735,7 @@ function App() {
       alignItems: 'flex-start',
       gap: '12px'
     }
-  }, /*#__PURE__*/React.createElement("div", null, cardTitle('Chain Wear'), cardSub(`Check every ${toDisp(800).toFixed(0)} ${dispUnit}`)), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, cardTitle('Chain Wear'), cardSub(chainBike ? `${chainBike.name} · check every ${toDisp(800).toFixed(0)} ${dispUnit}` : `Check every ${toDisp(800).toFixed(0)} ${dispUnit}`)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -1692,7 +1819,17 @@ function App() {
     unit: dispUnit
   }), /*#__PURE__*/React.createElement("div", {
     style: editHint
-  }, "+ ", formGarminDisp, " ", dispUnit, " ridden on Garmin since install", /*#__PURE__*/React.createElement("br", null), "= ", formTotalDisp, " ", dispUnit, " lifetime")), /*#__PURE__*/React.createElement("button", {
+  }, "+ ", formGarminDisp, " ", dispUnit, " ridden on Garmin since install", /*#__PURE__*/React.createElement("br", null), "= ", formTotalDisp, " ", dispUnit, " lifetime")), s.bikes.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '13px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: fieldLabel
+  }, "Bike"), /*#__PURE__*/React.createElement(BikePicker, {
+    bikes: s.bikes,
+    value: f.bikeId || null,
+    onChange: v => setForm('bikeId', v)
+  })), /*#__PURE__*/React.createElement("button", {
     className: "replace-link",
     onClick: resetChain,
     style: {
@@ -1842,6 +1979,78 @@ function App() {
     on: c.visible,
     onChange: () => toggleCardVisible(c.id)
   })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '19px 21px',
+      borderBottom: '1px solid var(--line)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '14px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: settingsLabel
+  }, "Bikes"), /*#__PURE__*/React.createElement("button", {
+    onClick: openAddBike,
+    style: {
+      background: 'none',
+      border: '1px solid var(--line)',
+      borderRadius: 'var(--radius)',
+      cursor: 'pointer',
+      color: 'var(--muted)',
+      fontFamily: 'var(--mono)',
+      fontSize: '10px',
+      letterSpacing: '.1em',
+      padding: '5px 10px'
+    }
+  }, "+ ADD")), s.bikes.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--mono)',
+      fontSize: '10px',
+      color: 'var(--faint)',
+      letterSpacing: '.08em'
+    }
+  }, "No bikes added yet — tap + ADD to create one") : s.bikes.map(b => /*#__PURE__*/React.createElement("div", {
+    key: b.id,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      padding: '9px 0',
+      borderTop: '1px solid var(--line)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '13px',
+      fontWeight: 500,
+      color: 'var(--text)'
+    }
+  }, b.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--mono)',
+      fontSize: '9.5px',
+      color: 'var(--faint)',
+      marginTop: '2px'
+    }
+  }, b.garminGearName)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => deleteBike(b.id),
+    style: {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: 'var(--faint)',
+      fontSize: '16px',
+      lineHeight: 1,
+      padding: '4px 6px'
+    }
+  }, "×")))), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '19px 21px'
     }
@@ -2017,7 +2226,101 @@ function App() {
       textTransform: 'uppercase',
       cursor: 'pointer'
     }
-  }, `Confirm ${f.ml || '—'} ${volUnit}`))), kind === 'wax-method' && /*#__PURE__*/React.createElement("div", {
+  }, `Confirm ${f.ml || '—'} ${volUnit}`))), kind === 'add-bike' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '13px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: fieldLabel
+  }, "Name"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    placeholder: "e.g. Scott Road Bike",
+    value: f.bikeName || '',
+    onChange: e => setForm('bikeName', e.target.value),
+    style: {
+      ...dateInput,
+      fontSize: '14px'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '18px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: fieldLabel
+  }, "Garmin gear"), gearFromRides.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--mono)',
+      fontSize: '10px',
+      color: 'var(--faint)',
+      lineHeight: 1.6
+    }
+  }, "No gear data in rides yet — tap ↻ sync first") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px'
+    }
+  }, gearFromRides.map(g => /*#__PURE__*/React.createElement("button", {
+    key: g.gearId,
+    onClick: () => {
+      setForm('bikeGearId', g.gearId);
+      setForm('bikeGearName', g.gearName);
+    },
+    style: {
+      width: '100%',
+      padding: '13px 14px',
+      borderRadius: 'var(--radius)',
+      cursor: 'pointer',
+      textAlign: 'left',
+      background: f.bikeGearId === g.gearId ? 'var(--accent)' : 'transparent',
+      border: '1px solid ' + (f.bikeGearId === g.gearId ? 'var(--accent)' : 'var(--line)'),
+      color: f.bikeGearId === g.gearId ? 'var(--accent-ink)' : 'var(--text)'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: '12px',
+      fontWeight: 600,
+      fontFamily: 'var(--mono)',
+      letterSpacing: '.04em'
+    }
+  }, g.gearName))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: closeModal,
+    style: {
+      flex: 1,
+      padding: '12px',
+      borderRadius: 'var(--radius)',
+      background: 'transparent',
+      border: '1px solid var(--line)',
+      color: 'var(--muted)',
+      fontFamily: 'var(--mono)',
+      fontSize: '11px',
+      letterSpacing: '.08em',
+      textTransform: 'uppercase',
+      cursor: 'pointer'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: confirmAddBike,
+    style: {
+      flex: 2,
+      padding: '12px',
+      borderRadius: 'var(--radius)',
+      background: 'var(--accent)',
+      border: 'none',
+      color: 'var(--accent-ink)',
+      fontFamily: 'var(--mono)',
+      fontSize: '11px',
+      fontWeight: 500,
+      letterSpacing: '.08em',
+      textTransform: 'uppercase',
+      cursor: 'pointer'
+    }
+  }, "Add Bike"))), kind === 'wax-method' && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexDirection: 'column',

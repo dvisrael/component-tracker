@@ -3,7 +3,7 @@
    rides.json by a scheduled GitHub Action. Counters combine a manual baseline
    with the sum of rides recorded after a per-component "sync anchor", so a
    reset or a hand-edited total is never double-counted against past rides. */
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 /* ── Theme presets ─────────────────────────────────────────────── */
 const PRESETS = {
@@ -29,7 +29,7 @@ const SAMPLE = {
   chain:{ installDate: daysAgoIso(132), adjustKm:540, lastCheckKm:0 },
 };
 
-const KEYS = { sealant:'chain:sealant_v2', wax:'chain:wax_reset', chain:'chain:chain_install', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache', ghToken:'chain:gh_token', cards:'chain:cards' };
+const KEYS = { sealant:'chain:sealant_v2', wax:'chain:wax_reset', chain:'chain:chain_install', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache', ghToken:'chain:gh_token', cards:'chain:cards', bikes:'chain:bikes' };
 
 const CARD_META = {sealant:'Sealant', wax:'Wax', chain:'Chain Wear'};
 const DEFAULT_CARDS = [{id:'sealant',visible:true},{id:'wax',visible:true},{id:'chain',visible:true}];
@@ -169,6 +169,13 @@ const NumField = ({value,onChange,min,max,unit,fsize})=>(
 const editHint = {fontFamily:'var(--mono)',fontSize:'9.5px',color:'var(--faint)',marginTop:'9px',lineHeight:1.7};
 const settingsLabel = {fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.18em',color:'var(--faint)',textTransform:'uppercase',marginBottom:'12px'};
 const segGroup = {display:'flex',border:'1px solid var(--line)',borderRadius:'var(--radius)',overflow:'hidden'};
+const BikePicker = ({bikes, value, onChange}) => (
+  <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+    <Chip active={!value} label="All bikes" onClick={()=>onChange(null)} />
+    {bikes.map(b=><Chip key={b.id} active={value===b.id} label={b.name} onClick={()=>onChange(b.id)} />)}
+  </div>
+);
+
 const GearIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
 const BackIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
 
@@ -178,7 +185,7 @@ function App(){
     sealantData:null, waxData:null, chainData:null,
     theme:'light', direction:'editorial', units:'metric', view:'main',
     rides:[], ridesUpdated:null, syncing:false, githubToken:'',
-    cards: DEFAULT_CARDS,
+    cards: DEFAULT_CARDS, bikes:[],
     toast:null, modal:null, form:{}, flip:null,
   });
   const patch = (p)=> setS(prev=> ({...prev, ...(typeof p==='function'?p(prev):p)}));
@@ -188,8 +195,8 @@ function App(){
   // Distance = adjustKm + (Garmin rides since the install/wax date). Normalise any
   // earlier shape (raw km totals, or the old manualKm+syncAnchor) to adjustKm:0 so
   // the counter becomes Garmin-driven from the stored date.
-  const normWax = (w)=>{ if(!w) return null; if(w.adjustKm===undefined){ return {resetDate:w.resetDate||nowIso(), adjustKm:0, method:w.method||'Drip'}; } return w; };
-  const normChain = (c)=>{ if(!c) return null; if(c.adjustKm===undefined){ return {installDate:c.installDate||nowIso(), adjustKm:0, lastCheckKm:(c.lastCheckKm||0)}; } return c; };
+  const normWax = (w)=>{ if(!w) return null; const base = w.adjustKm===undefined ? {resetDate:w.resetDate||nowIso(), adjustKm:0, method:w.method||'Drip'} : w; return {bikeId:null,...base}; };
+  const normChain = (c)=>{ if(!c) return null; const base = c.adjustKm===undefined ? {installDate:c.installDate||nowIso(), adjustKm:0, lastCheckKm:(c.lastCheckKm||0)} : c; return {bikeId:null,...base}; };
 
   // initial load + sample seed + ride cache
   useEffect(()=>{
@@ -207,6 +214,7 @@ function App(){
       units:     parse(g(KEYS.units))  || 'metric',
       rides: cache.rides||[], ridesUpdated: cache.updated||null,
       githubToken: parse(g(KEYS.ghToken)) || '',
+      bikes: parse(g(KEYS.bikes)) || [],
       cards: (()=>{
         const raw = parse(g(KEYS.cards));
         const valid = ['sealant','wax','chain'];
@@ -251,6 +259,35 @@ function App(){
   const setDirection = (d)=>{ patch({direction:d}); persist(KEYS.dir,d); };
   const setUnits = (u)=>{ patch({units:u}); persist(KEYS.units,u); };
   const setGithubToken = (t)=>{ patch({githubToken:t}); persist(KEYS.ghToken,t); };
+
+  // Unique (gearId, gearName) pairs seen in rides — used as options when adding a bike
+  const gearFromRides = useMemo(()=>{
+    const seen=new Map();
+    for(const r of s.rides){ if(r.gearId && !seen.has(r.gearId)) seen.set(r.gearId,r.gearName||r.gearId); }
+    return [...seen.entries()].map(([gearId,gearName])=>({gearId,gearName}));
+  },[s.rides]);
+
+  const saveBikes = (list)=>{ patch({bikes:list}); persist(KEYS.bikes,list); };
+  const addBike = (name,gearId,gearName)=>{
+    const id='b_'+Date.now();
+    saveBikes([...s.bikes,{id,name:name.trim()||gearName,garminGearId:gearId,garminGearName:gearName}]);
+  };
+  const deleteBike = (id)=>{
+    saveBikes(s.bikes.filter(b=>b.id!==id));
+    // unlink any components that referenced this bike
+    const uc=s.chainData?.bikeId===id?{...s.chainData,bikeId:null}:s.chainData;
+    const uw=s.waxData?.bikeId===id?{...s.waxData,bikeId:null}:s.waxData;
+    if(uc!==s.chainData){ patch({chainData:uc}); persist(KEYS.chain,uc); }
+    if(uw!==s.waxData){ patch({waxData:uw}); persist(KEYS.wax,uw); }
+  };
+  const openAddBike = ()=> patch({form:{bikeName:'',bikeGearId:'',bikeGearName:''},modal:{kind:'add-bike'}});
+  const confirmAddBike = ()=>{
+    const f=s.form;
+    if(!f.bikeGearId){ toast('Pick a bike from the list first','warn'); return; }
+    addBike(f.bikeName, f.bikeGearId, f.bikeGearName);
+    patch({modal:null}); toast('Bike added');
+  };
+
   const moveCard = (idx,dir)=>{ const next=[...s.cards]; const to=idx+dir; if(to<0||to>=next.length) return; [next[idx],next[to]]=[next[to],next[idx]]; patch({cards:next}); persist(KEYS.cards,next); };
   const toggleCardVisible = (id)=>{ const next=s.cards.map(c=>c.id===id?{...c,visible:!c.visible}:c); patch({cards:next}); persist(KEYS.cards,next); };
 
@@ -285,12 +322,19 @@ function App(){
   const fromVol = (v)=>{ const n=parseFloat(v); if(isNaN(n)) return NaN; return imperial?n/0.033814:n; };
   const fmtVol = (ml)=>{ const v=toVol(ml); return imperial?v.toFixed(1):v.toFixed(0); };
 
-  // sum of ride distance (km) recorded at/after an anchor timestamp
-  const ridesSince = (anchorIso)=>{
+  // sum of ride distance (km) recorded at/after an anchor timestamp.
+  // If garminGearId is provided, rides on a DIFFERENT known bike are excluded;
+  // rides with no gear data (gearId absent or '') are always included.
+  const ridesSince = (anchorIso, garminGearId)=>{
     if(!anchorIso) return 0;
     const t=new Date(anchorIso).getTime();
     let sum=0;
-    for(const r of s.rides){ const rt=new Date(r.date).getTime(); if(!isNaN(rt) && rt>=t) sum+=(+r.km||0); }
+    for(const r of s.rides){
+      const rt=new Date(r.date).getTime();
+      if(isNaN(rt)||rt<t) continue;
+      if(garminGearId && r.gearId && r.gearId!==garminGearId) continue;
+      sum+=(+r.km||0);
+    }
     return sum;
   };
 
@@ -309,15 +353,15 @@ function App(){
 
   /* ── wax actions ── */
   const openWaxMethod = ()=> patch({modal:{kind:'wax-method'}});
-  const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,adjustKm:0,method}; patch({waxData:fresh,modal:null}); persist(KEYS.wax,fresh); toast(`Wax replaced (${method}) — counter reset`); };
-  const openEditWax = ()=>{ const wd=s.waxData; patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(wd?.adjustKm||0))), method: wd?.method||'Drip' }, flip:'wax' }); };
-  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
+  const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,adjustKm:0,method,bikeId:s.waxData?.bikeId||null}; patch({waxData:fresh,modal:null}); persist(KEYS.wax,fresh); toast(`Wax replaced (${method}) — counter reset`); };
+  const openEditWax = ()=>{ const wd=s.waxData; patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(wd?.adjustKm||0))), method: wd?.method||'Drip', bikeId: wd?.bikeId||null }, flip:'wax' }); };
+  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method, bikeId:f.bikeId||null }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
 
   /* ── chain actions ── */
-  const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,adjustKm:0,lastCheckKm:0}; patch({chainData:fresh,flip:null}); persist(KEYS.chain,fresh); toast('New chain — lifetime counter started'); };
-  const checkChain = ()=>{ const cd=s.chainData; if(!cd) return; const ck=(cd.adjustKm||0)+ridesSince(cd.installDate); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; patch({chainData:updated}); persist(KEYS.chain,updated); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
-  const openEditChain = ()=>{ const cd=s.chainData; patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cd?.adjustKm||0))) }, flip:'chain' }); };
-  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:s.chainData?.lastCheckKm||0 }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
+  const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,adjustKm:0,lastCheckKm:0,bikeId:s.chainData?.bikeId||null}; patch({chainData:fresh,flip:null}); persist(KEYS.chain,fresh); toast('New chain — lifetime counter started'); };
+  const checkChain = ()=>{ const cd=s.chainData; if(!cd) return; const chainBikeGear=(cd.bikeId?s.bikes.find(b=>b.id===cd.bikeId):null)?.garminGearId||null; const ck=(cd.adjustKm||0)+ridesSince(cd.installDate,chainBikeGear); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; patch({chainData:updated}); persist(KEYS.chain,updated); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
+  const openEditChain = ()=>{ const cd=s.chainData; patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cd?.adjustKm||0))), bikeId: cd?.bikeId||null }, flip:'chain' }); };
+  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:s.chainData?.lastCheckKm||0, bikeId:f.bikeId||null }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
 
   /* ── computed values ── */
   // sealant
@@ -336,7 +380,8 @@ function App(){
 
   // wax
   const wd=s.waxData;
-  const waxKm=wd?((wd.adjustKm||0)+ridesSince(wd.resetDate)):0;
+  const waxBike=wd?.bikeId?s.bikes.find(b=>b.id===wd.bikeId)||null:null;
+  const waxKm=wd?((wd.adjustKm||0)+ridesSince(wd.resetDate,waxBike?.garminGearId||null)):0;
   const waxOverdue=waxKm>=300, waxUrgent=waxKm>=250&&waxKm<300;
   const waxStatus=waxOverdue?'danger':waxUrgent?'warn':'healthy';
   const waxColor=waxStatus==='healthy'?'var(--accent)':waxStatus==='warn'?'var(--warn)':'var(--danger)';
@@ -344,7 +389,8 @@ function App(){
 
   // chain
   const cd=s.chainData;
-  const chainKm=cd?((cd.adjustKm||0)+ridesSince(cd.installDate)):0;
+  const chainBike=cd?.bikeId?s.bikes.find(b=>b.id===cd.bikeId)||null:null;
+  const chainKm=cd?((cd.adjustKm||0)+ridesSince(cd.installDate,chainBike?.garminGearId||null)):0;
   const checkInterval=800;
   const lastCheck=Math.floor((cd?.lastCheckKm??0)/checkInterval)*checkInterval;
   const nextCheck=lastCheck+checkInterval;
@@ -358,13 +404,15 @@ function App(){
   // modal / form
   const modal=s.modal, kind=modal?.kind, f=s.form;
   // Live preview for the edit forms: Garmin distance recorded since the chosen date.
-  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString()) : 0;
+  const formBike = f.bikeId ? s.bikes.find(b=>b.id===f.bikeId)||null : null;
+  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString(), formBike?.garminGearId||null) : 0;
   const formAdjDisp = parseFloat(f.km)||0;
   const formTotalDisp = (toDisp(formGarminKm)+formAdjDisp).toFixed(0);
   const formGarminDisp = toDisp(formGarminKm).toFixed(0);
   const modalMeta={
     'seal-ml':{title:nextAction==='TOP UP'?'Top Up Sealant':'Replace Sealant',sub:'How much did you add?'},
     'wax-method':{title:'Wax Method',sub:'How did you wax?'},
+    'add-bike':{title:'Add Bike',sub:'Name · Garmin gear'},
   }[kind]||{title:'',sub:''};
   const mlOpts = imperial?[1,2,3,4]:[25,50,75,100];
   const toastBg = !s.toast?'':s.toast.type==='warn'?'var(--warn)':s.toast.type==='err'?'var(--danger)':'var(--text)';
@@ -455,7 +503,7 @@ function App(){
             <div className={flipCls('wax')}>
               <section className="flip-front" style={cardStyle}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'}}>
-                  <div>{cardTitle('Wax')}{cardSub(`Distance · ~${toDisp(300).toFixed(0)} ${dispUnit}`)}</div>
+                  <div>{cardTitle('Wax')}{cardSub(waxBike?`${waxBike.name} · ~${toDisp(300).toFixed(0)} ${dispUnit}`:`Distance · ~${toDisp(300).toFixed(0)} ${dispUnit}`)}</div>
                   <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
                     <Badge label={!wd?'NOT SET':waxOverdue?'RE-WAX':waxUrgent?'DUE SOON':'ON TRACK'} bg={wbc.bg} text={wbc.text} />
                     <Hamburger onClick={openEditWax} />
@@ -481,12 +529,16 @@ function App(){
                   <NumField min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} unit={dispUnit} />
                   <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since this date<br/>= {formTotalDisp} {dispUnit} since last wax</div>
                 </div>
-                <div style={{marginBottom:'18px'}}>
+                <div style={{marginBottom:'13px'}}>
                   <div style={fieldLabel}>Method</div>
                   <div style={{display:'flex',gap:'8px'}}>
                     {['Drip','Immersion'].map(m=> <Chip key={m} active={f.method===m} label={m} onClick={()=>setForm('method',m)} />)}
                   </div>
                 </div>
+                {s.bikes.length>0 && <div style={{marginBottom:'18px'}}>
+                  <div style={fieldLabel}>Bike</div>
+                  <BikePicker bikes={s.bikes} value={f.bikeId||null} onChange={v=>setForm('bikeId',v)} />
+                </div>}
                 {editBtns(cancelFlip, saveEditWax)}
               </section>
             </div>
@@ -497,7 +549,7 @@ function App(){
             <div className={flipCls('chain')}>
               <section className="flip-front" style={cardStyle}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'}}>
-                  <div>{cardTitle('Chain Wear')}{cardSub(`Check every ${toDisp(800).toFixed(0)} ${dispUnit}`)}</div>
+                  <div>{cardTitle('Chain Wear')}{cardSub(chainBike?`${chainBike.name} · check every ${toDisp(800).toFixed(0)} ${dispUnit}`:`Check every ${toDisp(800).toFixed(0)} ${dispUnit}`)}</div>
                   <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
                     <Badge label={!cd?'NOT SET':chainDue?'CHECK WEAR':chainUrgent?'CHECK SOON':'HEALTHY'} bg={cbc.bg} text={cbc.text} />
                     <Hamburger onClick={openEditChain} />
@@ -526,6 +578,10 @@ function App(){
                   <NumField min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} unit={dispUnit} />
                   <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since install<br/>= {formTotalDisp} {dispUnit} lifetime</div>
                 </div>
+                {s.bikes.length>0 && <div style={{marginBottom:'13px'}}>
+                  <div style={fieldLabel}>Bike</div>
+                  <BikePicker bikes={s.bikes} value={f.bikeId||null} onChange={v=>setForm('bikeId',v)} />
+                </div>}
                 <button className="replace-link" onClick={resetChain} style={{width:'100%',padding:'11px',marginBottom:'8px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'10.5px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Replace chain · reset lifetime</button>
                 {editBtns(cancelFlip, saveEditChain)}
               </section>
@@ -580,6 +636,23 @@ function App(){
               </div>
             ))}
           </div>
+          <div style={{padding:'19px 21px',borderBottom:'1px solid var(--line)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
+              <div style={settingsLabel}>Bikes</div>
+              <button onClick={openAddBike} style={{background:'none',border:'1px solid var(--line)',borderRadius:'var(--radius)',cursor:'pointer',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.1em',padding:'5px 10px'}}>+ ADD</button>
+            </div>
+            {s.bikes.length===0
+              ? <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--faint)',letterSpacing:'.08em'}}>No bikes added yet — tap + ADD to create one</div>
+              : s.bikes.map(b=>(
+                <div key={b.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 0',borderTop:'1px solid var(--line)'}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:'13px',fontWeight:500,color:'var(--text)'}}>{b.name}</div>
+                    <div style={{fontFamily:'var(--mono)',fontSize:'9.5px',color:'var(--faint)',marginTop:'2px'}}>{b.garminGearName}</div>
+                  </div>
+                  <button onClick={()=>deleteBike(b.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--faint)',fontSize:'16px',lineHeight:1,padding:'4px 6px'}}>×</button>
+                </div>
+              ))}
+          </div>
           <div style={{padding:'19px 21px'}}>
             <div style={settingsLabel}>Garmin</div>
             <div style={{...fieldLabel,marginBottom:'7px'}}>GitHub token (enables force-sync)</div>
@@ -618,6 +691,34 @@ function App(){
                 <div style={{display:'flex',gap:'8px'}}>
                   <button onClick={closeModal} style={{flex:1,padding:'12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'11px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Cancel</button>
                   <button onClick={confirmSealantMl} style={{flex:2,padding:'12px',borderRadius:'var(--radius)',background:'var(--accent)',border:'none',color:'var(--accent-ink)',fontFamily:'var(--mono)',fontSize:'11px',fontWeight:500,letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>{`Confirm ${f.ml||'—'} ${volUnit}`}</button>
+                </div>
+              </React.Fragment>}
+
+            {kind==='add-bike' &&
+              <React.Fragment>
+                <div style={{marginBottom:'13px'}}>
+                  <div style={fieldLabel}>Name</div>
+                  <input type="text" placeholder="e.g. Scott Road Bike" value={f.bikeName||''} onChange={e=>setForm('bikeName',e.target.value)} style={{...dateInput,fontSize:'14px'}} />
+                </div>
+                <div style={{marginBottom:'18px'}}>
+                  <div style={fieldLabel}>Garmin gear</div>
+                  {gearFromRides.length===0
+                    ? <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--faint)',lineHeight:1.6}}>No gear data in rides yet — tap ↻ sync first</div>
+                    : <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                        {gearFromRides.map(g=>(
+                          <button key={g.gearId} onClick={()=>{ setForm('bikeGearId',g.gearId); setForm('bikeGearName',g.gearName); }}
+                            style={{width:'100%',padding:'13px 14px',borderRadius:'var(--radius)',cursor:'pointer',textAlign:'left',
+                              background: f.bikeGearId===g.gearId?'var(--accent)':'transparent',
+                              border:'1px solid '+(f.bikeGearId===g.gearId?'var(--accent)':'var(--line)'),
+                              color: f.bikeGearId===g.gearId?'var(--accent-ink)':'var(--text)'}}>
+                            <span style={{display:'block',fontSize:'12px',fontWeight:600,fontFamily:'var(--mono)',letterSpacing:'.04em'}}>{g.gearName}</span>
+                          </button>
+                        ))}
+                      </div>}
+                </div>
+                <div style={{display:'flex',gap:'8px'}}>
+                  <button onClick={closeModal} style={{flex:1,padding:'12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'11px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Cancel</button>
+                  <button onClick={confirmAddBike} style={{flex:2,padding:'12px',borderRadius:'var(--radius)',background:'var(--accent)',border:'none',color:'var(--accent-ink)',fontFamily:'var(--mono)',fontSize:'11px',fontWeight:500,letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Add Bike</button>
                 </div>
               </React.Fragment>}
 
