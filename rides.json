@@ -1,4 +1,166 @@
 {
-  "updated": null,
-  "rides": []
+  "updated": "2026-06-23T21:01:29.552091Z",
+  "rides": [
+    {
+      "id": "22232739727",
+      "date": "2026-03-20T00:12:09Z",
+      "km": 17.733,
+      "name": "Zwift - Pacer Group Ride with Maria",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "22301167728",
+      "date": "2026-03-26T00:25:00Z",
+      "km": 15.182,
+      "name": "Zwift - INEOS Grenadiers Virtual Training Camp | The Cafe Ride",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "22342476089",
+      "date": "2026-03-29T18:05:24Z",
+      "km": 33.408,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22521773387",
+      "date": "2026-04-14T10:18:53Z",
+      "km": 48.542,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22552757414",
+      "date": "2026-04-16T19:41:05Z",
+      "km": 35.485,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22632067557",
+      "date": "2026-04-23T13:13:17Z",
+      "km": 16.822,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22636509811",
+      "date": "2026-04-23T22:42:17Z",
+      "km": 16.775,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "22677091944",
+      "date": "2026-04-27T12:29:11Z",
+      "km": 16.83,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "22682946195",
+      "date": "2026-04-27T21:46:28Z",
+      "km": 16.744,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "22808517558",
+      "date": "2026-05-08T10:05:10Z",
+      "km": 58.925,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22855223669",
+      "date": "2026-05-12T12:57:20Z",
+      "km": 27.299,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "22860665478",
+      "date": "2026-05-12T22:07:11Z",
+      "km": 15.813,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "22891551504",
+      "date": "2026-05-15T11:42:22Z",
+      "km": 53.203,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22893430009",
+      "date": "2026-05-15T18:22:05Z",
+      "km": 15.969,
+      "name": "New York Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "22916784494",
+      "date": "2026-05-17T15:14:16Z",
+      "km": 74.079,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "23045729364",
+      "date": "2026-05-28T12:07:26Z",
+      "km": 18.565,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "23049435344",
+      "date": "2026-05-28T21:13:44Z",
+      "km": 15.833,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "23143551875",
+      "date": "2026-06-05T12:43:47Z",
+      "km": 31.497,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "23143552108",
+      "date": "2026-06-05T18:27:34Z",
+      "km": 27.162,
+      "name": "New York Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "23188148576",
+      "date": "2026-06-09T13:00:42Z",
+      "km": 24.872,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "23262500875",
+      "date": "2026-06-15T19:01:27Z",
+      "km": 56.127,
+      "name": "Fort Lee Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "23271258186",
+      "date": "2026-06-16T13:06:05Z",
+      "km": 16.354,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "23276106932",
+      "date": "2026-06-16T22:31:43Z",
+      "km": 15.757,
+      "name": "New York Cycling",
+      "type": "cycling"
+    }
+  ]
 }
