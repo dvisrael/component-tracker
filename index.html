@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Component Tracker</title>
+
+<!-- PWA / installable -->
+<meta name="theme-color" id="theme-color" content="#FFFFFF">
+<meta name="description" content="Bike chain, wax & sealant maintenance tracker — distance synced from Garmin.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<!-- iOS home-screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tracker">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sans:'Hanken Grotesk',system-ui,-apple-system,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --bg:#FFFFFF; --card:#FFFFFF; --text:#100F0C; --muted:#6E6C64; --faint:#A6A49C;
+    --line:#E7E5DE; --accent:#141310; --accent-ink:#FAFAF8;
+    --warn:#F7C24F; --danger:#CF4327;
+    --radius:5px; --shadow:0 1px 2px rgba(20,18,12,.05); --ticks:none; --num-font:var(--sans);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);}
+  body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @keyframes pop{from{opacity:0;transform:translateY(12px) scale(.985);}to{opacity:1;transform:translateY(0) scale(1);}}
+  .flip{perspective:1500px;}
+  .flip-inner{position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,0,.2,1);}
+  .flip-inner.flipped{transform:rotateY(180deg);}
+  .flip-front,.flip-back{backface-visibility:hidden;-webkit-backface-visibility:hidden;}
+  .flip-back{transform:rotateY(180deg);}
+  .flip-inner:not(.flipped) .flip-back{visibility:hidden;height:0;min-height:0;overflow:hidden;padding:0 !important;margin:0;border:none !important;}
+  .flip-inner.flipped .flip-front{visibility:hidden;height:0;min-height:0;overflow:hidden;padding:0 !important;margin:0;border:none !important;}
+  input[type=date]::-webkit-calendar-picker-indicator{filter:var(--cal-filter,none);opacity:.55;cursor:pointer;}
+  input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+  .icon-btn{opacity:.5;transition:opacity .15s;}
+  .icon-btn:hover{opacity:1;}
+  .x-btn{transition:color .15s;}
+  .x-btn:hover{color:var(--text) !important;}
+  .press{transition:transform .08s;}
+  .press:active{transform:scale(.985);}
+  .seg,.chip,.method-act,.replace-link{transition:all .18s;}
+  .method-act:hover{border-color:var(--accent) !important;}
+  .hdr-btn:hover{border-color:var(--accent) !important;color:var(--accent) !important;}
+  .replace-link:hover{color:var(--danger) !important;border-color:var(--danger) !important;}
+  input:focus{border-color:var(--accent) !important;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(){});
+    });
+  }
+</script>
+</body>
+</html>
