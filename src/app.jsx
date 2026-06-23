@@ -124,8 +124,8 @@ const Primary = ({onClick,label}) => (
 const cardStyle = {background:'var(--card)',border:'1px solid var(--line)',borderRadius:'var(--radius)',boxShadow:'var(--shadow)',padding:'21px 21px 19px'};
 const backStyle = {background:'var(--card)',border:'1px solid var(--line)',borderRadius:'var(--radius)',boxShadow:'var(--shadow)',padding:'21px'};
 const fieldLabel = {fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.16em',color:'var(--faint)',textTransform:'uppercase',marginBottom:'7px'};
-const dateInput = {width:'100%',padding:'11px 12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--text)',fontFamily:'var(--mono)',fontSize:'13px',outline:'none'};
-const numInput = {flex:1,padding:'11px 12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--text)',fontFamily:'var(--num-font)',fontSize:'18px',fontWeight:600,textAlign:'center',outline:'none'};
+const dateInput = {width:'100%',boxSizing:'border-box',padding:'11px 12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--text)',fontFamily:'var(--mono)',fontSize:'13px',outline:'none'};
+const numInput = {width:'100%',boxSizing:'border-box',padding:'11px 44px 11px 12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--text)',fontFamily:'var(--num-font)',fontSize:'18px',fontWeight:600,textAlign:'center',outline:'none'};
 
 const EditHeader = ({title,sub,onClose}) => (
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'18px',gap:'12px'}}>
@@ -145,6 +145,13 @@ const editBtns = (onCancel,onSave,saveLabel='Save') => (
 
 const cardTitle = (t) => <div style={{fontSize:'17px',fontWeight:600,letterSpacing:'-0.01em',color:'var(--text)'}}>{t}</div>;
 const cardSub = (t) => <div style={{fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.18em',color:'var(--faint)',textTransform:'uppercase',marginTop:'5px'}}>{t}</div>;
+
+const NumField = ({value,onChange,min,max,unit,fsize})=>(
+  <div style={{position:'relative'}}>
+    <input type="number" min={min} max={max} value={value} onChange={onChange} style={fsize?{...numInput,fontSize:fsize}:numInput} />
+    <span style={{position:'absolute',right:'13px',top:'50%',transform:'translateY(-50%)',fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)',pointerEvents:'none'}}>{unit}</span>
+  </div>
+);
 
 const editHint = {fontFamily:'var(--mono)',fontSize:'9.5px',color:'var(--faint)',marginTop:'9px',lineHeight:1.7};
 const settingsLabel = {fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.18em',color:'var(--faint)',textTransform:'uppercase',marginBottom:'12px'};
@@ -410,10 +417,7 @@ function App(){
                   <div style={{display:'flex',gap:'7px',marginBottom:'9px'}}>
                     {mlOpts.map(v=> <Chip key={v} active={String(f.ml)===String(v)} label={String(v)} onClick={()=>setForm('ml',String(v))} />)}
                   </div>
-                  <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-                    <input type="number" min="1" max="500" value={f.ml||''} onChange={e=>setForm('ml',e.target.value)} style={numInput} />
-                    <span style={{fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)'}}>{volUnit}</span>
-                  </div>
+                  <NumField min="1" max="500" value={f.ml||''} onChange={e=>setForm('ml',e.target.value)} unit={volUnit} />
                 </div>
                 {editBtns(cancelFlip, saveEditSeal)}
               </section>
@@ -448,10 +452,7 @@ function App(){
                 </div>
                 <div style={{marginBottom:'13px'}}>
                   <div style={fieldLabel}>Manual adjustment</div>
-                  <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-                    <input type="number" min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} style={numInput} />
-                    <span style={{fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)'}}>{dispUnit}</span>
-                  </div>
+                  <NumField min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} unit={dispUnit} />
                   <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since this date<br/>= {formTotalDisp} {dispUnit} since last wax</div>
                 </div>
                 <div style={{marginBottom:'18px'}}>
@@ -496,10 +497,7 @@ function App(){
                 </div>
                 <div style={{marginBottom:'18px'}}>
                   <div style={fieldLabel}>Manual adjustment</div>
-                  <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-                    <input type="number" min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} style={numInput} />
-                    <span style={{fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)'}}>{dispUnit}</span>
-                  </div>
+                  <NumField min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} unit={dispUnit} />
                   <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since install<br/>= {formTotalDisp} {dispUnit} lifetime</div>
                 </div>
                 <button className="replace-link" onClick={resetChain} style={{width:'100%',padding:'11px',marginBottom:'8px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'10.5px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Replace chain · reset lifetime</button>
@@ -571,10 +569,7 @@ function App(){
                   <div style={{display:'flex',gap:'7px',marginBottom:'9px'}}>
                     {mlOpts.map(v=> <Chip key={v} active={String(f.ml)===String(v)} label={String(v)} onClick={()=>setForm('ml',String(v))} />)}
                   </div>
-                  <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-                    <input type="number" min="1" max="500" value={f.ml||''} onChange={e=>setForm('ml',e.target.value)} style={{...numInput,fontSize:'20px'}} />
-                    <span style={{fontFamily:'var(--mono)',fontSize:'12px',color:'var(--muted)'}}>{volUnit}</span>
-                  </div>
+                  <NumField min="1" max="500" value={f.ml||''} onChange={e=>setForm('ml',e.target.value)} unit={volUnit} fsize="20px" />
                 </div>
                 <div style={{display:'flex',gap:'8px'}}>
                   <button onClick={closeModal} style={{flex:1,padding:'12px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'11px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Cancel</button>

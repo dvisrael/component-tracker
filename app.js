@@ -469,6 +469,7 @@ const fieldLabel = {
 };
 const dateInput = {
   width: '100%',
+  boxSizing: 'border-box',
   padding: '11px 12px',
   borderRadius: 'var(--radius)',
   background: 'transparent',
@@ -479,8 +480,9 @@ const dateInput = {
   outline: 'none'
 };
 const numInput = {
-  flex: 1,
-  padding: '11px 12px',
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '11px 44px 11px 12px',
   borderRadius: 'var(--radius)',
   background: 'transparent',
   border: '1px solid var(--line)',
@@ -587,6 +589,39 @@ const cardSub = t => /*#__PURE__*/React.createElement("div", {
     marginTop: '5px'
   }
 }, t);
+const NumField = ({
+  value,
+  onChange,
+  min,
+  max,
+  unit,
+  fsize
+}) => /*#__PURE__*/React.createElement("div", {
+  style: {
+    position: 'relative'
+  }
+}, /*#__PURE__*/React.createElement("input", {
+  type: "number",
+  min: min,
+  max: max,
+  value: value,
+  onChange: onChange,
+  style: fsize ? {
+    ...numInput,
+    fontSize: fsize
+  } : numInput
+}), /*#__PURE__*/React.createElement("span", {
+  style: {
+    position: 'absolute',
+    right: '13px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    fontFamily: 'var(--mono)',
+    fontSize: '12px',
+    color: 'var(--muted)',
+    pointerEvents: 'none'
+  }
+}, unit));
 const editHint = {
   fontFamily: 'var(--mono)',
   fontSize: '9.5px',
@@ -1359,26 +1394,13 @@ function App() {
     active: String(f.ml) === String(v),
     label: String(v),
     onClick: () => setForm('ml', String(v))
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '9px'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
+  }))), /*#__PURE__*/React.createElement(NumField, {
     min: "1",
     max: "500",
     value: f.ml || '',
     onChange: e => setForm('ml', e.target.value),
-    style: numInput
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: 'var(--mono)',
-      fontSize: '12px',
-      color: 'var(--muted)'
-    }
-  }, volUnit))), editBtns(cancelFlip, saveEditSeal)))), /*#__PURE__*/React.createElement("div", {
+    unit: volUnit
+  })), editBtns(cancelFlip, saveEditSeal)))), /*#__PURE__*/React.createElement("div", {
     className: "flip"
   }, /*#__PURE__*/React.createElement("div", {
     className: flipCls('wax')
@@ -1465,26 +1487,13 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: fieldLabel
-  }, "Manual adjustment"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '9px'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
+  }, "Manual adjustment"), /*#__PURE__*/React.createElement(NumField, {
     min: "-20000",
     max: "20000",
     value: f.km ?? '',
     onChange: e => setForm('km', e.target.value),
-    style: numInput
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: 'var(--mono)',
-      fontSize: '12px',
-      color: 'var(--muted)'
-    }
-  }, dispUnit)), /*#__PURE__*/React.createElement("div", {
+    unit: dispUnit
+  }), /*#__PURE__*/React.createElement("div", {
     style: editHint
   }, "+ ", formGarminDisp, " ", dispUnit, " ridden on Garmin since this date", /*#__PURE__*/React.createElement("br", null), "= ", formTotalDisp, " ", dispUnit, " since last wax")), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1592,26 +1601,13 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: fieldLabel
-  }, "Manual adjustment"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '9px'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
+  }, "Manual adjustment"), /*#__PURE__*/React.createElement(NumField, {
     min: "-20000",
     max: "20000",
     value: f.km ?? '',
     onChange: e => setForm('km', e.target.value),
-    style: numInput
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: 'var(--mono)',
-      fontSize: '12px',
-      color: 'var(--muted)'
-    }
-  }, dispUnit)), /*#__PURE__*/React.createElement("div", {
+    unit: dispUnit
+  }), /*#__PURE__*/React.createElement("div", {
     style: editHint
   }, "+ ", formGarminDisp, " ", dispUnit, " ridden on Garmin since install", /*#__PURE__*/React.createElement("br", null), "= ", formTotalDisp, " ", dispUnit, " lifetime")), /*#__PURE__*/React.createElement("button", {
     className: "replace-link",
@@ -1836,29 +1832,14 @@ function App() {
     active: String(f.ml) === String(v),
     label: String(v),
     onClick: () => setForm('ml', String(v))
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '9px'
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
+  }))), /*#__PURE__*/React.createElement(NumField, {
     min: "1",
     max: "500",
     value: f.ml || '',
     onChange: e => setForm('ml', e.target.value),
-    style: {
-      ...numInput,
-      fontSize: '20px'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: 'var(--mono)',
-      fontSize: '12px',
-      color: 'var(--muted)'
-    }
-  }, volUnit))), /*#__PURE__*/React.createElement("div", {
+    unit: volUnit,
+    fsize: "20px"
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '8px'
