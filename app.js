@@ -140,7 +140,8 @@ const KEYS = {
   theme: 'chain:theme',
   dir: 'chain:direction',
   units: 'chain:units',
-  rides: 'chain:rides_cache'
+  rides: 'chain:rides_cache',
+  ghToken: 'chain:gh_token'
 };
 
 /* ── Date / format helpers ─────────────────────────────────────── */
@@ -653,6 +654,8 @@ function App() {
     view: 'main',
     rides: [],
     ridesUpdated: null,
+    syncing: false,
+    githubToken: '',
     toast: null,
     modal: null,
     form: {},
@@ -663,6 +666,7 @@ function App() {
     ...(typeof p === 'function' ? p(prev) : p)
   }));
   const toastTimer = useRef(null);
+  const syncTimer = useRef(null);
 
   // Distance = adjustKm + (Garmin rides since the install/wax date). Normalise any
   // earlier shape (raw km totals, or the old manualKm+syncAnchor) to adjustKm:0 so
@@ -721,7 +725,8 @@ function App() {
       direction: parse(g(KEYS.dir)) || 'editorial',
       units: parse(g(KEYS.units)) || 'metric',
       rides: cache.rides || [],
-      ridesUpdated: cache.updated || null
+      ridesUpdated: cache.updated || null,
+      githubToken: parse(g(KEYS.ghToken)) || ''
     });
     loadRides();
     const onVis = () => {
@@ -808,6 +813,55 @@ function App() {
     });
     persist(KEYS.units, u);
   };
+  const setGithubToken = t => {
+    patch({
+      githubToken: t
+    });
+    persist(KEYS.ghToken, t);
+  };
+  function triggerSync() {
+    const token = s.githubToken;
+    if (!token) {
+      loadRides();
+      return;
+    }
+    patch({
+      syncing: true
+    });
+    fetch('https://api.github.com/repos/dvisrael/component-tracker/actions/workflows/sync.yml/dispatches', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ref: 'main'
+      })
+    }).then(r => {
+      if (r.status === 204) {
+        toast('Garmin sync triggered · updating in ~1 min');
+        clearTimeout(syncTimer.current);
+        syncTimer.current = setTimeout(() => {
+          loadRides();
+          patch({
+            syncing: false
+          });
+        }, 90000);
+      } else {
+        patch({
+          syncing: false
+        });
+        toast('Sync failed — check token in Settings', 'err');
+        loadRides();
+      }
+    }).catch(() => {
+      patch({
+        syncing: false
+      });
+      loadRides();
+    });
+  }
 
   // unit conversions (depend on current units)
   const imperial = s.units === 'imperial';
@@ -1126,7 +1180,7 @@ function App() {
   const toastBg = !s.toast ? '' : s.toast.type === 'warn' ? 'var(--warn)' : s.toast.type === 'err' ? 'var(--danger)' : 'var(--text)';
   const toastColor = !s.toast ? '' : s.toast.type === 'ok' ? 'var(--bg)' : '#fff';
   const flipCls = name => 'flip-inner' + (s.flip === name ? ' flipped' : '');
-  const syncLabel = s.ridesUpdated ? `Garmin · ${s.rides.length} ride${s.rides.length === 1 ? '' : 's'} · synced ${relTime(s.ridesUpdated)}` : 'Garmin sync not connected yet';
+  const syncLabel = s.syncing ? 'Syncing…' : s.ridesUpdated ? `Garmin · ${s.rides.length} ride${s.rides.length === 1 ? '' : 's'} · synced ${relTime(s.ridesUpdated)}` : 'Garmin sync not connected yet';
   const isSettings = s.view === 'settings';
   const isMain = !isSettings;
   const headerTitle = isSettings ? 'Settings' : 'Component Tracker';
@@ -1582,19 +1636,21 @@ function App() {
       textAlign: 'center'
     }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: loadRides,
+    onClick: triggerSync,
+    disabled: s.syncing,
     className: "x-btn",
     style: {
       background: 'none',
       border: 'none',
-      cursor: 'pointer',
+      cursor: s.syncing ? 'default' : 'pointer',
       fontFamily: 'var(--mono)',
       fontSize: '9.5px',
       letterSpacing: '.12em',
       textTransform: 'uppercase',
-      color: 'var(--faint)'
+      color: 'var(--faint)',
+      opacity: s.syncing ? .55 : 1
     }
-  }, syncLabel, " · ↻"))), isSettings && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("section", {
+  }, syncLabel, s.syncing ? '' : ' · ↻'))), isSettings && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("section", {
     style: {
       background: 'var(--card)',
       border: '1px solid var(--line)',
@@ -1634,7 +1690,8 @@ function App() {
     onClick: () => setTheme(m)
   })))), /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: '19px 21px'
+      padding: '19px 21px',
+      borderBottom: '1px solid var(--line)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: settingsLabel
@@ -1646,7 +1703,35 @@ function App() {
     active: s.units === u,
     label: u,
     onClick: () => setUnits(u)
-  }))))), /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '19px 21px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: settingsLabel
+  }, "Garmin"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...fieldLabel,
+      marginBottom: '7px'
+    }
+  }, "GitHub token (enables force-sync)"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: s.githubToken || '',
+    onChange: e => setGithubToken(e.target.value),
+    placeholder: "ghp_…",
+    style: {
+      ...dateInput,
+      letterSpacing: '.04em'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--mono)',
+      fontSize: '9px',
+      color: 'var(--faint)',
+      marginTop: '8px',
+      lineHeight: 1.75
+    }
+  }, "Fine-grained PAT · Actions read/write · this repo only · stored on-device"))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: '18px',
       fontFamily: 'var(--mono)',
