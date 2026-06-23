@@ -1,6 +1,426 @@
 {
-  "updated": "2026-06-23T21:01:29.552091Z",
+  "updated": "2026-06-23T21:37:35.008419Z",
   "rides": [
+    {
+      "id": "17995483040",
+      "date": "2025-01-13T21:00:19Z",
+      "km": 44.386,
+      "name": "Zwift - Group Ride: Long | Stage 2 | Tour de Zwift on Snowman in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "18129057846",
+      "date": "2025-01-29T00:52:47Z",
+      "km": 36.009,
+      "name": "Zwift - GPT Sweet Spot in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "18402242984",
+      "date": "2025-02-28T17:11:01Z",
+      "km": 22.138,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "18492674777",
+      "date": "2025-03-10T12:33:58Z",
+      "km": 21.032,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "18561805138",
+      "date": "2025-03-17T23:36:21Z",
+      "km": 20.412,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "18863636233",
+      "date": "2025-04-18T12:24:55Z",
+      "km": 21.079,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "18926518978",
+      "date": "2025-04-18T19:56:30Z",
+      "km": 21.167,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "18927633412",
+      "date": "2025-04-24T22:04:31Z",
+      "km": 33.553,
+      "name": "Fort Lee Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "18931643546",
+      "date": "2025-04-25T12:53:28Z",
+      "km": 15.349,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "18934553277",
+      "date": "2025-04-25T19:45:42Z",
+      "km": 15.237,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19024838352",
+      "date": "2025-05-04T13:31:17Z",
+      "km": 51.523,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19056645061",
+      "date": "2025-05-07T20:51:43Z",
+      "km": 41.777,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19122138072",
+      "date": "2025-05-14T11:48:21Z",
+      "km": 14.985,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19142178348",
+      "date": "2025-05-16T11:10:28Z",
+      "km": 36.099,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19165732212",
+      "date": "2025-05-18T16:24:11Z",
+      "km": 38.95,
+      "name": "New York Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19165726661",
+      "date": "2025-05-18T19:10:19Z",
+      "km": 20.703,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19187407993",
+      "date": "2025-05-20T22:47:28Z",
+      "km": 30.242,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19231922584",
+      "date": "2025-05-25T12:28:08Z",
+      "km": 49.039,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19242001080",
+      "date": "2025-05-26T15:49:31Z",
+      "km": 40.58,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19244345510",
+      "date": "2025-05-26T21:32:13Z",
+      "km": 2.476,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19283008399",
+      "date": "2025-05-30T16:50:11Z",
+      "km": 68.185,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19345410182",
+      "date": "2025-06-05T22:57:31Z",
+      "km": 25.6,
+      "name": "Englewood Cliffs Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19350681058",
+      "date": "2025-06-06T12:24:37Z",
+      "km": 50.069,
+      "name": "Haverstraw Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19612924014",
+      "date": "2025-06-27T19:32:35Z",
+      "km": 28.361,
+      "name": "Englewood Cliffs Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19673656992",
+      "date": "2025-07-02T18:17:11Z",
+      "km": 6.832,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19673955985",
+      "date": "2025-07-08T22:11:16Z",
+      "km": 15.025,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19823147651",
+      "date": "2025-07-22T23:04:05Z",
+      "km": 27.151,
+      "name": "Englewood Cliffs Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19834405644",
+      "date": "2025-07-24T12:43:02Z",
+      "km": 15.259,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19838235667",
+      "date": "2025-07-24T19:29:12Z",
+      "km": 15.683,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19844424209",
+      "date": "2025-07-25T12:09:32Z",
+      "km": 29.928,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19847154276",
+      "date": "2025-07-25T17:22:55Z",
+      "km": 15.753,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19910899686",
+      "date": "2025-07-31T12:38:51Z",
+      "km": 29.946,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "19952592058",
+      "date": "2025-08-04T20:34:28Z",
+      "km": 41.657,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19991558001",
+      "date": "2025-08-07T13:04:05Z",
+      "km": 49.441,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "19995896612",
+      "date": "2025-08-08T19:33:13Z",
+      "km": 35.131,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20046305081",
+      "date": "2025-08-13T12:06:46Z",
+      "km": 61.629,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20068193559",
+      "date": "2025-08-15T12:33:15Z",
+      "km": 73.908,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20119869829",
+      "date": "2025-08-20T10:26:59Z",
+      "km": 53.374,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20145752436",
+      "date": "2025-08-22T20:45:15Z",
+      "km": 24.278,
+      "name": "Montreal Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20182685398",
+      "date": "2025-08-26T10:01:25Z",
+      "km": 55.768,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20215145972",
+      "date": "2025-08-29T09:59:23Z",
+      "km": 80.32,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20236058899",
+      "date": "2025-08-31T10:43:41Z",
+      "km": 77.511,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20292411468",
+      "date": "2025-09-05T18:57:05Z",
+      "km": 46.491,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20435047597",
+      "date": "2025-09-19T10:13:08Z",
+      "km": 77.255,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20509499948",
+      "date": "2025-09-26T18:54:43Z",
+      "km": 32.404,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20738951645",
+      "date": "2025-10-19T12:31:34Z",
+      "km": 84.742,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20852725256",
+      "date": "2025-10-31T17:42:09Z",
+      "km": 51.266,
+      "name": "Zwift - Bike ride 4*4 min *2 on Danger Noodle in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "20870908600",
+      "date": "2025-11-02T12:42:53Z",
+      "km": 67.769,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "20905632924",
+      "date": "2025-11-06T01:03:12Z",
+      "km": 42.427,
+      "name": "Zwift - Wed ride on Double Parked in New York",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "20973428007",
+      "date": "2025-11-13T01:13:08Z",
+      "km": 27.652,
+      "name": "Zwift - Spin bike on Elevation Evaluation in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "21047088835",
+      "date": "2025-11-20T22:19:07Z",
+      "km": 23.745,
+      "name": "Zwift - big time! on Radio Rendezvous in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "21072962471",
+      "date": "2025-11-23T19:35:30Z",
+      "km": 36.826,
+      "name": "Zwift - WORK WORK WORK WOEK on Three Little Sisters in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "21107555362",
+      "date": "2025-11-27T16:11:54Z",
+      "km": 48.87,
+      "name": "Zwift - Indoor session! on Watts of the Wild in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "21207073215",
+      "date": "2025-12-09T01:37:32Z",
+      "km": 31.806,
+      "name": "Zwift - Loch Loop in Scotland",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "21239676998",
+      "date": "2025-12-12T16:58:07Z",
+      "km": 23.546,
+      "name": "Zwift - Tair Dringfa Fechan in Watopia",
+      "type": "virtual_ride"
+    },
+    {
+      "id": "21284828804",
+      "date": "2025-12-17T19:27:56Z",
+      "km": 38.185,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "21317215972",
+      "date": "2025-12-21T15:50:21Z",
+      "km": 50.73,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking"
+    },
+    {
+      "id": "21464640694",
+      "date": "2026-01-06T15:40:53Z",
+      "km": 16.729,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "21485170942",
+      "date": "2026-01-08T13:28:42Z",
+      "km": 18.137,
+      "name": "Englewood Cycling",
+      "type": "cycling"
+    },
+    {
+      "id": "21487403249",
+      "date": "2026-01-08T22:53:44Z",
+      "km": 17.882,
+      "name": "New York Cycling",
+      "type": "cycling"
+    },
     {
       "id": "22232739727",
       "date": "2026-03-20T00:12:09Z",
