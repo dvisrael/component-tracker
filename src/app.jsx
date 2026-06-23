@@ -301,7 +301,6 @@ function App(){
       body:JSON.stringify({ref:'main'}),
     }).then(r=>{
       if(r.status===204){
-        toast('Garmin sync triggered · updating in ~1 min');
         clearTimeout(syncTimer.current);
         syncTimer.current = setTimeout(()=>{ loadRides(); patch({syncing:false}); }, 90000);
       } else {
