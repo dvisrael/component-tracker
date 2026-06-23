@@ -1,32 +1,23 @@
 #!/usr/bin/env python3
-"""Generate a GARMIN_TOKENS secret for accounts with two-factor enabled (or to
-avoid GitHub runner-IP rate limits on fresh logins).
+"""Generate the GARMIN_TOKENS secret (works with two-factor auth, and avoids
+GitHub runner-IP rate limits since the Action then resumes a session instead of
+doing a fresh password login).
 
-Run locally — it logs into Garmin, prompting for your MFA code, saves the OAuth
-session, and prints a base64 blob. Paste that into a repo secret named
-GARMIN_TOKENS. The scheduled Action then resumes the session instead of doing a
-password login (no MFA prompt, far less likely to be rate limited).
+Run locally — it logs into Garmin, prompting for your MFA code, then prints a
+token string. Paste that whole string into a repo secret named GARMIN_TOKENS.
 
-    pip install garminconnect          # installs garth too
-    python tools/garmin_token.py
+    python3 -m venv /tmp/garmin-venv && /tmp/garmin-venv/bin/pip install garminconnect
+    /tmp/garmin-venv/bin/python tools/garmin_token.py
 """
-import base64, getpass, io, os, tarfile, tempfile
-import garth
+import getpass
+from garminconnect import Garmin
 
 email = input("Garmin email: ").strip()
 password = getpass.getpass("Garmin password: ")
 
-# garth handles the MFA challenge via prompt_mfa; just type the code it texts/app-gens.
-garth.login(email, password, prompt_mfa=lambda: input("MFA code: ").strip())
+g = Garmin(email, password, prompt_mfa=lambda: input("MFA code: ").strip())
+g.login()
 
-token_dir = tempfile.mkdtemp(prefix="garth_")
-garth.save(token_dir)  # writes oauth1_token.json + oauth2_token.json
-
-buf = io.BytesIO()
-with tarfile.open(fileobj=buf, mode="w:gz") as t:
-    for name in os.listdir(token_dir):
-        t.add(os.path.join(token_dir, name), arcname=name)
-
-print("\n--- copy EVERYTHING below into the GARMIN_TOKENS repo secret ---\n")
-print(base64.b64encode(buf.getvalue()).decode())
-print("\n--- end ---")
+print("\n--- copy EVERYTHING between the lines into the GARMIN_TOKENS repo secret ---")
+print(g.client.dumps())
+print("--- end ---")

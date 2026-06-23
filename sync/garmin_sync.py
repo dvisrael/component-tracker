@@ -12,7 +12,7 @@ Optional:
   LOOKBACK_DAYS  (default 120)     — how far back to pull each run. Older rides
                                      already in rides.json are preserved.
 """
-import os, sys, json, base64, tarfile, io, tempfile
+import os, sys, json
 from datetime import datetime, timedelta, timezone
 
 from garminconnect import Garmin
@@ -30,28 +30,34 @@ def is_cycling(type_key: str) -> bool:
 
 
 def login() -> Garmin:
+    # Preferred: resume a saved session (works with two-factor; avoids the
+    # runner-IP rate limits that a fresh password login hits). GARMIN_TOKENS is
+    # the string printed by tools/garmin_token.py.
     tokens = os.environ.get("GARMIN_TOKENS")
-    if tokens:
-        token_dir = tempfile.mkdtemp(prefix="garth_")
-        with tarfile.open(fileobj=io.BytesIO(base64.b64decode(tokens)), mode="r:gz") as t:
-            t.extractall(token_dir)
+    if tokens and tokens.strip():
         g = Garmin()
-        g.login(token_dir)
+        g.login(tokens.strip())  # long token string -> loaded directly
         return g
+
     email = os.environ.get("GARMIN_EMAIL")
     password = os.environ.get("GARMIN_PASSWORD")
     if not (email and password):
-        sys.exit("error: set GARMIN_EMAIL + GARMIN_PASSWORD, or GARMIN_TOKENS")
+        sys.exit("error: set GARMIN_TOKENS (recommended), or GARMIN_EMAIL + GARMIN_PASSWORD")
+
     g = Garmin(email, password)
     try:
-        g.login()
+        needs_mfa, _ = g.login()
     except Exception as e:
+        needs_mfa, _err = "error", e
+    else:
+        _err = None
+    if needs_mfa:
         sys.exit(
-            f"Garmin login failed ({type(e).__name__}: {e}).\n"
-            "If your account uses two-factor auth, or this keeps hitting a 429 rate "
-            "limit on the runner IP, password login can't complete here. Generate a "
-            "session locally with `python tools/garmin_token.py` and add its output "
-            "as a GARMIN_TOKENS repo secret — the Action will resume that instead."
+            "Garmin password login could not complete here"
+            + (f" ({type(_err).__name__}: {_err})" if _err else " (two-factor auth required)")
+            + ".\nGenerate a session locally with `python tools/garmin_token.py` and add its "
+            "output as a GARMIN_TOKENS repo secret — the Action resumes that instead "
+            "(also sidesteps runner-IP 429 rate limits)."
         )
     return g
 
