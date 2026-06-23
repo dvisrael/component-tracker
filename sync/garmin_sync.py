@@ -43,7 +43,16 @@ def login() -> Garmin:
     if not (email and password):
         sys.exit("error: set GARMIN_EMAIL + GARMIN_PASSWORD, or GARMIN_TOKENS")
     g = Garmin(email, password)
-    g.login()
+    try:
+        g.login()
+    except Exception as e:
+        sys.exit(
+            f"Garmin login failed ({type(e).__name__}: {e}).\n"
+            "If your account uses two-factor auth, or this keeps hitting a 429 rate "
+            "limit on the runner IP, password login can't complete here. Generate a "
+            "session locally with `python tools/garmin_token.py` and add its output "
+            "as a GARMIN_TOKENS repo secret — the Action will resume that instead."
+        )
     return g
 
 
