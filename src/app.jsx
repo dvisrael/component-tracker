@@ -37,14 +37,18 @@ const DEFAULT_CARDS = [{id:'sealant',visible:true},{id:'wax',visible:true},{id:'
 /* ── Date / format helpers ─────────────────────────────────────── */
 const daysUntil = (iso)=> Math.floor((new Date(iso).getTime()-Date.now())/(864e5));
 const addDays = (iso,n)=>{ const d=new Date(iso); d.setDate(d.getDate()+n); return d.toISOString(); };
+// Parse a "YYYY-MM-DD" date-input string as local noon so stored UTC never drifts a day.
+const isoFromDate = (d)=> new Date(d+'T12:00:00').toISOString();
+// Return "YYYY-MM-DD" in local time for use as date-input value.
+const isoDay = (iso)=>{ const d=new Date(iso); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const todayDay = ()=> isoDay(new Date().toISOString());
 const fmtLong = (iso)=>{
   if(!iso) return '—';
-  const d=new Date(iso), day=d.getDate();
+  // Parse via the date portion as local noon to avoid UTC-midnight off-by-one.
+  const d=new Date(iso.slice(0,10)+'T12:00:00'), day=d.getDate();
   const s=(day===1||day===21||day===31)?'st':(day===2||day===22)?'nd':(day===3||day===23)?'rd':'th';
   return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}).replace(/(\d+)/,`$1${s}`);
 };
-const isoDay = (iso)=> new Date(iso).toISOString().split('T')[0];
-const todayDay = ()=> new Date().toISOString().split('T')[0];
 const relTime = (iso)=>{
   if(!iso) return 'never';
   const mins=Math.floor((Date.now()-new Date(iso).getTime())/60000);
@@ -348,19 +352,19 @@ function App(){
   const completeSealantCycle = (ml)=>{ const sd=s.sealantData; const now=nowIso(); const action=sd.cycleCount%2===0?'TOP UP':'REPLACE'; const updated={...sd,cycleCount:sd.cycleCount+1,lastDate:now,...(action==='TOP UP'?{lastTopUpMl:ml}:{lastReplaceMl:ml})}; patch({sealantData:updated}); persist(KEYS.sealant,updated); toast(`${action==='TOP UP'?'Top up':'Replace'} logged${ml?` · ${fmtVol(ml)} ${volUnit}`:''}`); };
   const confirmSealantMl = ()=>{ const ml=Math.round(fromVol(s.form.ml)); patch({modal:null}); completeSealantCycle(isNaN(ml)||ml<=0?null:ml); };
   const openEditSeal = ()=>{ const sd=s.sealantData; patch({ form:{ date: sd?isoDay(sd.lastDate):todayDay(), ml:String(fmtVol(sd?(sd.lastTopUpMl||sd.lastReplaceMl||50):50)), type: sd?(sd.cycleCount%2===1?'TOP UP':'REPLACE'):'TOP UP' }, flip:'sealant' }); };
-  const saveEditSeal = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const ml=Math.round(fromVol(f.ml)); const mlVal=isNaN(ml)||ml<=0?null:ml; const cycleCount=f.type==='TOP UP'?1:2; const updated={ firstDate:s.sealantData?.firstDate||iso, cycleCount, lastDate:iso, ...(f.type==='TOP UP'?{lastTopUpMl:mlVal}:{lastReplaceMl:mlVal}) }; patch({sealantData:updated,flip:null}); persist(KEYS.sealant,updated); toast('Sealant history updated'); };
+  const saveEditSeal = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const ml=Math.round(fromVol(f.ml)); const mlVal=isNaN(ml)||ml<=0?null:ml; const cycleCount=f.type==='TOP UP'?1:2; const updated={ firstDate:s.sealantData?.firstDate||iso, cycleCount, lastDate:iso, ...(f.type==='TOP UP'?{lastTopUpMl:mlVal}:{lastReplaceMl:mlVal}) }; patch({sealantData:updated,flip:null}); persist(KEYS.sealant,updated); toast('Sealant history updated'); };
 
   /* ── wax actions ── */
   const openWaxMethod = ()=> patch({modal:{kind:'wax-method'}});
   const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,adjustKm:0,method,bikeId:s.waxData?.bikeId||null}; patch({waxData:fresh,modal:null}); persist(KEYS.wax,fresh); toast(`Wax replaced (${method}) — counter reset`); };
   const openEditWax = ()=>{ const wd=s.waxData; patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(wd?.adjustKm||0))), method: wd?.method||'Drip', bikeId: wd?.bikeId||null }, flip:'wax' }); };
-  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method, bikeId:f.bikeId||null }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
+  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method, bikeId:f.bikeId||null }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
 
   /* ── chain actions ── */
   const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,adjustKm:0,lastCheckKm:0,bikeId:s.chainData?.bikeId||null}; patch({chainData:fresh,flip:null}); persist(KEYS.chain,fresh); toast('New chain — lifetime counter started'); };
   const checkChain = ()=>{ const cd=s.chainData; if(!cd) return; const chainBikeGear=(cd.bikeId?s.bikes.find(b=>b.id===cd.bikeId):null)?.garminGearId||null; const ck=(cd.adjustKm||0)+ridesSince(cd.installDate,chainBikeGear); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; patch({chainData:updated}); persist(KEYS.chain,updated); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
   const openEditChain = ()=>{ const cd=s.chainData; patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cd?.adjustKm||0))), bikeId: cd?.bikeId||null }, flip:'chain' }); };
-  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=new Date(f.date).toISOString(); const adj=fromDisp(f.km); const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:s.chainData?.lastCheckKm||0, bikeId:f.bikeId||null }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
+  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const adj=fromDisp(f.km); const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:s.chainData?.lastCheckKm||0, bikeId:f.bikeId||null }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
 
   /* ── computed values ── */
   // sealant
@@ -404,7 +408,7 @@ function App(){
   const modal=s.modal, kind=modal?.kind, f=s.form;
   // Live preview for the edit forms: Garmin distance recorded since the chosen date.
   const formBike = f.bikeId ? s.bikes.find(b=>b.id===f.bikeId)||null : null;
-  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString(), formBike?.garminGearId||null) : 0;
+  const formGarminKm = f.date ? ridesSince(isoFromDate(f.date), formBike?.garminGearId||null) : 0;
   const formAdjDisp = parseFloat(f.km)||0;
   const formTotalDisp = (toDisp(formGarminKm)+formAdjDisp).toFixed(0);
   const formGarminDisp = toDisp(formGarminKm).toFixed(0);

@@ -169,9 +169,18 @@ const addDays = (iso, n) => {
   d.setDate(d.getDate() + n);
   return d.toISOString();
 };
+// Parse a "YYYY-MM-DD" date-input string as local noon so stored UTC never drifts a day.
+const isoFromDate = d => new Date(d + 'T12:00:00').toISOString();
+// Return "YYYY-MM-DD" in local time for use as date-input value.
+const isoDay = iso => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const todayDay = () => isoDay(new Date().toISOString());
 const fmtLong = iso => {
   if (!iso) return '—';
-  const d = new Date(iso),
+  // Parse via the date portion as local noon to avoid UTC-midnight off-by-one.
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00'),
     day = d.getDate();
   const s = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th';
   return d.toLocaleDateString('en-US', {
@@ -180,8 +189,6 @@ const fmtLong = iso => {
     year: 'numeric'
   }).replace(/(\d+)/, `$1${s}`);
 };
-const isoDay = iso => new Date(iso).toISOString().split('T')[0];
-const todayDay = () => new Date().toISOString().split('T')[0];
 const relTime = iso => {
   if (!iso) return 'never';
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -1191,7 +1198,7 @@ function App() {
       });
       return;
     }
-    const iso = new Date(f.date).toISOString();
+    const iso = isoFromDate(f.date);
     const ml = Math.round(fromVol(f.ml));
     const mlVal = isNaN(ml) || ml <= 0 ? null : ml;
     const cycleCount = f.type === 'TOP UP' ? 1 : 2;
@@ -1254,7 +1261,7 @@ function App() {
       });
       return;
     }
-    const iso = new Date(f.date).toISOString();
+    const iso = isoFromDate(f.date);
     const adj = fromDisp(f.km);
     const updated = {
       resetDate: iso,
@@ -1321,7 +1328,7 @@ function App() {
       });
       return;
     }
-    const iso = new Date(f.date).toISOString();
+    const iso = isoFromDate(f.date);
     const adj = fromDisp(f.km);
     const updated = {
       installDate: iso,
@@ -1384,7 +1391,7 @@ function App() {
     f = s.form;
   // Live preview for the edit forms: Garmin distance recorded since the chosen date.
   const formBike = f.bikeId ? s.bikes.find(b => b.id === f.bikeId) || null : null;
-  const formGarminKm = f.date ? ridesSince(new Date(f.date).toISOString(), formBike?.garminGearId || null) : 0;
+  const formGarminKm = f.date ? ridesSince(isoFromDate(f.date), formBike?.garminGearId || null) : 0;
   const formAdjDisp = parseFloat(f.km) || 0;
   const formTotalDisp = (toDisp(formGarminKm) + formAdjDisp).toFixed(0);
   const formGarminDisp = toDisp(formGarminKm).toFixed(0);
