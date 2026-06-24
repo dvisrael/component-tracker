@@ -29,7 +29,7 @@ const SAMPLE = {
   chain:{ installDate: daysAgoIso(132), adjustKm:540, lastCheckKm:0 },
 };
 
-const KEYS = { sealant:'chain:sealant_v2', wax:'chain:wax_reset', chain:'chain:chain_install', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache', ghToken:'chain:gh_token', cards:'chain:cards', bikes:'chain:bikes' };
+const KEYS = { sealant:'chain:sealant_records', wax:'chain:wax_records', chain:'chain:chain_records', theme:'chain:theme', dir:'chain:direction', units:'chain:units', rides:'chain:rides_cache', ghToken:'chain:gh_token', cards:'chain:cards', bikes:'chain:bikes', activeBike:'chain:active_bike' };
 
 const CARD_META = {sealant:'Sealant', wax:'Wax', chain:'Chain Wear'};
 const DEFAULT_CARDS = [{id:'sealant',visible:true},{id:'wax',visible:true},{id:'chain',visible:true}];
@@ -186,7 +186,7 @@ const BackIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="non
 /* ── App ───────────────────────────────────────────────────────── */
 function App(){
   const [s, setS] = useState({
-    sealantData:null, waxData:null, chainData:null,
+    sealantRecords:{}, waxRecords:{}, chainRecords:{}, activeBikeId:null,
     theme:'light', direction:'editorial', units:'metric', view:'main',
     rides:[], ridesUpdated:null, syncing:false, githubToken:'',
     cards: DEFAULT_CARDS, bikes:[],
@@ -196,23 +196,51 @@ function App(){
   const toastTimer = useRef(null);
   const syncTimer = useRef(null);
 
-  // Distance = adjustKm + (Garmin rides since the install/wax date). Normalise any
-  // earlier shape (raw km totals, or the old manualKm+syncAnchor) to adjustKm:0 so
-  // the counter becomes Garmin-driven from the stored date.
-  const normWax = (w)=>{ if(!w) return null; const base = w.adjustKm===undefined ? {resetDate:w.resetDate||nowIso(), adjustKm:0, method:w.method||'Drip'} : w; return {bikeId:null,...base}; };
-  const normChain = (c)=>{ if(!c) return null; const base = c.adjustKm===undefined ? {installDate:c.installDate||nowIso(), adjustKm:0, lastCheckKm:(c.lastCheckKm||0)} : c; return {bikeId:null,...base}; };
+  // Normalise old single-record shapes (pre-multi-bike era) for migration.
+  const normWax = (w)=>{ if(!w) return null; return w.adjustKm===undefined ? {resetDate:w.resetDate||nowIso(), adjustKm:0, method:w.method||'Drip'} : {resetDate:w.resetDate, adjustKm:w.adjustKm, method:w.method||'Drip'}; };
+  const normChain = (c)=>{ if(!c) return null; return c.adjustKm===undefined ? {installDate:c.installDate||nowIso(), adjustKm:0, lastCheckKm:(c.lastCheckKm||0)} : {installDate:c.installDate, adjustKm:c.adjustKm, lastCheckKm:c.lastCheckKm||0}; };
 
   // initial load + sample seed + ride cache
   useEffect(()=>{
     let ls; try{ ls=window.localStorage; }catch(_){ ls=null; }
     const g=(k)=>{ try{ return ls?ls.getItem(k):null; }catch(_){ return null; } };
-    const sd=parse(g(KEYS.sealant)), wd=normWax(parse(g(KEYS.wax))), cd=normChain(parse(g(KEYS.chain)));
-    const seed = !sd && !wd && !cd;
+
+    // Load multi-record maps; migrate from old single-record keys on first run.
+    let waxRecords = parse(g(KEYS.wax));
+    if(!waxRecords){
+      waxRecords = {};
+      const old = normWax(parse(g('chain:wax_reset')));
+      if(old){ const k = (parse(g('chain:wax_reset'))||{}).bikeId||'_all'; waxRecords[k]=old; }
+      persist(KEYS.wax, waxRecords);
+    }
+    let chainRecords = parse(g(KEYS.chain));
+    if(!chainRecords){
+      chainRecords = {};
+      const old = normChain(parse(g('chain:chain_install')));
+      if(old){ const k = (parse(g('chain:chain_install'))||{}).bikeId||'_all'; chainRecords[k]=old; }
+      persist(KEYS.chain, chainRecords);
+    }
+    let sealantRecords = parse(g(KEYS.sealant));
+    if(!sealantRecords){
+      sealantRecords = {};
+      const old = parse(g('chain:sealant_v2'));
+      if(old) sealantRecords['_all'] = old;
+      persist(KEYS.sealant, sealantRecords);
+    }
+
+    const seed = !Object.keys(waxRecords).length && !Object.keys(chainRecords).length && !Object.keys(sealantRecords).length;
+    if(seed){
+      waxRecords = {'_all': SAMPLE.wax};
+      chainRecords = {'_all': SAMPLE.chain};
+      sealantRecords = {'_all': SAMPLE.sealant};
+      persist(KEYS.wax, waxRecords);
+      persist(KEYS.chain, chainRecords);
+      persist(KEYS.sealant, sealantRecords);
+    }
     const cache = parse(g(KEYS.rides)) || {rides:[],updated:null};
     patch({
-      sealantData: sd || (seed?SAMPLE.sealant:null),
-      waxData:     wd || (seed?SAMPLE.wax:null),
-      chainData:   cd || (seed?SAMPLE.chain:null),
+      sealantRecords, waxRecords, chainRecords,
+      activeBikeId: parse(g(KEYS.activeBike)) || null,
       theme:     parse(g(KEYS.theme))  || 'light',
       direction: parse(g(KEYS.dir))    || 'editorial',
       units:     parse(g(KEYS.units))  || 'metric',
@@ -278,11 +306,12 @@ function App(){
   };
   const deleteBike = (id)=>{
     saveBikes(s.bikes.filter(b=>b.id!==id));
-    // unlink any components that referenced this bike
-    const uc=s.chainData?.bikeId===id?{...s.chainData,bikeId:null}:s.chainData;
-    const uw=s.waxData?.bikeId===id?{...s.waxData,bikeId:null}:s.waxData;
-    if(uc!==s.chainData){ patch({chainData:uc}); persist(KEYS.chain,uc); }
-    if(uw!==s.waxData){ patch({waxData:uw}); persist(KEYS.wax,uw); }
+    if(s.activeBikeId===id){ patch({activeBikeId:null}); persist(KEYS.activeBike,null); }
+    const newWax={...s.waxRecords}; delete newWax[id];
+    const newChain={...s.chainRecords}; delete newChain[id];
+    const newSeal={...s.sealantRecords}; delete newSeal[id];
+    patch({waxRecords:newWax, chainRecords:newChain, sealantRecords:newSeal});
+    persist(KEYS.wax,newWax); persist(KEYS.chain,newChain); persist(KEYS.sealant,newSeal);
   };
   const openAddBike = ()=> patch({form:{bikeName:'',bikeGearId:'',bikeGearName:''},modal:{kind:'add-bike'}});
   const confirmAddBike = ()=>{
@@ -341,34 +370,40 @@ function App(){
     return sum;
   };
 
+  // Active-bike context — derived once here so actions and computed values share it.
+  const rk = s.activeBikeId || '_all';
+  const activeBike = s.activeBikeId ? s.bikes.find(b=>b.id===s.activeBikeId)||null : null;
+  const garminGearId = activeBike?.garminGearId || null;
+  const setActiveBike = (id)=>{ patch({activeBikeId:id}); persist(KEYS.activeBike,id); };
+
   const cancelFlip = ()=> patch({flip:null});
   const toggleSettings = ()=> patch(prev=>({ view: prev.view==='settings'?'main':'settings', flip:null, modal:null }));
   const closeModal = ()=> patch({modal:null});
   const stop = (e)=> e.stopPropagation();
 
-  /* ── sealant actions (time-based, ride-independent) ── */
-  const installSealant = ()=>{ const now=nowIso(); const fresh={firstDate:now,cycleCount:0,lastDate:now}; patch({sealantData:fresh}); persist(KEYS.sealant,fresh); toast('Fresh sealant logged — top-up in 90 days'); };
+  /* ── sealant actions (time-based, per active bike) ── */
+  const installSealant = ()=>{ const now=nowIso(); const fresh={firstDate:now,cycleCount:0,lastDate:now}; const nr={...s.sealantRecords,[rk]:fresh}; patch({sealantRecords:nr}); persist(KEYS.sealant,nr); toast('Fresh sealant logged — top-up in 90 days'); };
   const openSealantMl = ()=> patch({form:{ml:imperial?'2':'50'},modal:{kind:'seal-ml'}});
-  const completeSealantCycle = (ml)=>{ const sd=s.sealantData; const now=nowIso(); const action=sd.cycleCount%2===0?'TOP UP':'REPLACE'; const updated={...sd,cycleCount:sd.cycleCount+1,lastDate:now,...(action==='TOP UP'?{lastTopUpMl:ml}:{lastReplaceMl:ml})}; patch({sealantData:updated}); persist(KEYS.sealant,updated); toast(`${action==='TOP UP'?'Top up':'Replace'} logged${ml?` · ${fmtVol(ml)} ${volUnit}`:''}`); };
+  const completeSealantCycle = (ml)=>{ const sd=s.sealantRecords[rk]; const now=nowIso(); const action=sd.cycleCount%2===0?'TOP UP':'REPLACE'; const updated={...sd,cycleCount:sd.cycleCount+1,lastDate:now,...(action==='TOP UP'?{lastTopUpMl:ml}:{lastReplaceMl:ml})}; const nr={...s.sealantRecords,[rk]:updated}; patch({sealantRecords:nr}); persist(KEYS.sealant,nr); toast(`${action==='TOP UP'?'Top up':'Replace'} logged${ml?` · ${fmtVol(ml)} ${volUnit}`:''}`); };
   const confirmSealantMl = ()=>{ const ml=Math.round(fromVol(s.form.ml)); patch({modal:null}); completeSealantCycle(isNaN(ml)||ml<=0?null:ml); };
-  const openEditSeal = ()=>{ const sd=s.sealantData; patch({ form:{ date: sd?isoDay(sd.lastDate):todayDay(), ml:String(fmtVol(sd?(sd.lastTopUpMl||sd.lastReplaceMl||50):50)), type: sd?(sd.cycleCount%2===1?'TOP UP':'REPLACE'):'TOP UP' }, flip:'sealant' }); };
-  const saveEditSeal = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const ml=Math.round(fromVol(f.ml)); const mlVal=isNaN(ml)||ml<=0?null:ml; const cycleCount=f.type==='TOP UP'?1:2; const updated={ firstDate:s.sealantData?.firstDate||iso, cycleCount, lastDate:iso, ...(f.type==='TOP UP'?{lastTopUpMl:mlVal}:{lastReplaceMl:mlVal}) }; patch({sealantData:updated,flip:null}); persist(KEYS.sealant,updated); toast('Sealant history updated'); };
+  const openEditSeal = ()=>{ const sd=s.sealantRecords[rk]; patch({ form:{ date: sd?isoDay(sd.lastDate):todayDay(), ml:String(fmtVol(sd?(sd.lastTopUpMl||sd.lastReplaceMl||50):50)), type: sd?(sd.cycleCount%2===1?'TOP UP':'REPLACE'):'TOP UP' }, flip:'sealant' }); };
+  const saveEditSeal = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const ml=Math.round(fromVol(f.ml)); const mlVal=isNaN(ml)||ml<=0?null:ml; const cycleCount=f.type==='TOP UP'?1:2; const sd=s.sealantRecords[rk]; const updated={ firstDate:sd?.firstDate||iso, cycleCount, lastDate:iso, ...(f.type==='TOP UP'?{lastTopUpMl:mlVal}:{lastReplaceMl:mlVal}) }; const nr={...s.sealantRecords,[rk]:updated}; patch({sealantRecords:nr,flip:null}); persist(KEYS.sealant,nr); toast('Sealant history updated'); };
 
   /* ── wax actions ── */
   const openWaxMethod = ()=> patch({modal:{kind:'wax-method'}});
-  const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,adjustKm:0,method,bikeId:s.waxData?.bikeId||null}; patch({waxData:fresh,modal:null}); persist(KEYS.wax,fresh); toast(`Wax replaced (${method}) — counter reset`); };
-  const openEditWax = ()=>{ const wd=s.waxData; patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(wd?.adjustKm||0))), method: wd?.method||'Drip', bikeId: wd?.bikeId||null }, flip:'wax' }); };
-  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method, bikeId:f.bikeId||null }; patch({waxData:updated,flip:null}); persist(KEYS.wax,updated); toast('Wax updated'); };
+  const confirmWaxMethod = (method)=>{ const now=nowIso(); const fresh={resetDate:now,adjustKm:0,method}; const nr={...s.waxRecords,[rk]:fresh}; patch({waxRecords:nr,modal:null}); persist(KEYS.wax,nr); toast(`Wax replaced (${method}) — counter reset`); };
+  const openEditWax = ()=>{ const wd=s.waxRecords[rk]; patch({ form:{ date: wd?.resetDate?isoDay(wd.resetDate):todayDay(), km:String(Math.round(toDisp(wd?.adjustKm||0))), method: wd?.method||'Drip' }, flip:'wax' }); };
+  const saveEditWax = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const adj=fromDisp(f.km); const updated={ resetDate:iso, adjustKm:isNaN(adj)?0:adj, method:f.method }; const nr={...s.waxRecords,[rk]:updated}; patch({waxRecords:nr,flip:null}); persist(KEYS.wax,nr); toast('Wax updated'); };
 
   /* ── chain actions ── */
-  const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,adjustKm:0,lastCheckKm:0,bikeId:s.chainData?.bikeId||null}; patch({chainData:fresh,flip:null}); persist(KEYS.chain,fresh); toast('New chain — lifetime counter started'); };
-  const checkChain = ()=>{ const cd=s.chainData; if(!cd) return; const chainBikeGear=(cd.bikeId?s.bikes.find(b=>b.id===cd.bikeId):null)?.garminGearId||null; const ck=(cd.adjustKm||0)+ridesSince(cd.installDate,chainBikeGear); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; patch({chainData:updated}); persist(KEYS.chain,updated); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
-  const openEditChain = ()=>{ const cd=s.chainData; patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cd?.adjustKm||0))), bikeId: cd?.bikeId||null }, flip:'chain' }); };
-  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const adj=fromDisp(f.km); const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:s.chainData?.lastCheckKm||0, bikeId:f.bikeId||null }; patch({chainData:updated,flip:null}); persist(KEYS.chain,updated); toast('Chain updated'); };
+  const resetChain = ()=>{ const now=nowIso(); const fresh={installDate:now,adjustKm:0,lastCheckKm:0}; const nr={...s.chainRecords,[rk]:fresh}; patch({chainRecords:nr,flip:null}); persist(KEYS.chain,nr); toast('New chain — lifetime counter started'); };
+  const checkChain = ()=>{ const cd=s.chainRecords[rk]; if(!cd) return; const ck=(cd.adjustKm||0)+ridesSince(cd.installDate,garminGearId); const cleared=Math.floor(ck/800)*800; const updated={...cd,lastCheckKm:cleared}; const nr={...s.chainRecords,[rk]:updated}; patch({chainRecords:nr}); persist(KEYS.chain,nr); toast(`Wear check logged — next check at ${(cleared+800).toFixed(0)} km`); };
+  const openEditChain = ()=>{ const cd=s.chainRecords[rk]; patch({ form:{ date: cd?.installDate?isoDay(cd.installDate):todayDay(), km:String(Math.round(toDisp(cd?.adjustKm||0))) }, flip:'chain' }); };
+  const saveEditChain = ()=>{ const f=s.form; if(!f.date){ patch({flip:null}); return; } const iso=isoFromDate(f.date); const adj=fromDisp(f.km); const cd=s.chainRecords[rk]; const updated={ installDate:iso, adjustKm:isNaN(adj)?0:adj, lastCheckKm:cd?.lastCheckKm||0 }; const nr={...s.chainRecords,[rk]:updated}; patch({chainRecords:nr,flip:null}); persist(KEYS.chain,nr); toast('Chain updated'); };
 
   /* ── computed values ── */
   // sealant
-  const sd=s.sealantData, hasSealant=!!sd;
+  const sd=s.sealantRecords[rk]||null, hasSealant=!!sd;
   const sealDue=hasSealant?addDays(sd.lastDate,90):null;
   const sealDaysLeft=sealDue?daysUntil(sealDue):null;
   const sealPctN=hasSealant?Math.max(0,Math.min(1,1-sealDaysLeft/90)):0;
@@ -382,18 +417,16 @@ function App(){
   const sealLastAction=hasSealant?(sd.cycleCount===0?'Fresh install':sd.cycleCount%2===1?'Top up':'Replaced'):'Not set';
 
   // wax
-  const wd=s.waxData;
-  const waxBike=wd?.bikeId?s.bikes.find(b=>b.id===wd.bikeId)||null:null;
-  const waxKm=wd?((wd.adjustKm||0)+ridesSince(wd.resetDate,waxBike?.garminGearId||null)):0;
+  const wd=s.waxRecords[rk]||null;
+  const waxKm=wd?((wd.adjustKm||0)+ridesSince(wd.resetDate,garminGearId)):0;
   const waxOverdue=waxKm>=300, waxUrgent=waxKm>=250&&waxKm<300;
   const waxStatus=waxOverdue?'danger':waxUrgent?'warn':'healthy';
   const waxColor=waxStatus==='healthy'?'var(--accent)':waxStatus==='warn'?'var(--warn)':'var(--danger)';
   const wbc=badgeColors(!wd?'neutral':waxOverdue?'danger':waxUrgent?'warn':'neutral');
 
   // chain
-  const cd=s.chainData;
-  const chainBike=cd?.bikeId?s.bikes.find(b=>b.id===cd.bikeId)||null:null;
-  const chainKm=cd?((cd.adjustKm||0)+ridesSince(cd.installDate,chainBike?.garminGearId||null)):0;
+  const cd=s.chainRecords[rk]||null;
+  const chainKm=cd?((cd.adjustKm||0)+ridesSince(cd.installDate,garminGearId)):0;
   const checkInterval=800;
   const lastCheck=Math.floor((cd?.lastCheckKm??0)/checkInterval)*checkInterval;
   const nextCheck=lastCheck+checkInterval;
@@ -407,8 +440,7 @@ function App(){
   // modal / form
   const modal=s.modal, kind=modal?.kind, f=s.form;
   // Live preview for the edit forms: Garmin distance recorded since the chosen date.
-  const formBike = f.bikeId ? s.bikes.find(b=>b.id===f.bikeId)||null : null;
-  const formGarminKm = f.date ? ridesSince(isoFromDate(f.date), formBike?.garminGearId||null) : 0;
+  const formGarminKm = f.date ? ridesSince(isoFromDate(f.date), garminGearId) : 0;
   const formAdjDisp = parseFloat(f.km)||0;
   const formTotalDisp = (toDisp(formGarminKm)+formAdjDisp).toFixed(0);
   const formGarminDisp = toDisp(formGarminKm).toFixed(0);
@@ -455,7 +487,7 @@ function App(){
             <div className={flipCls('sealant')}>
               <section className="flip-front" style={cardStyle}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'}}>
-                  <div>{cardTitle('Sealant')}{cardSub('90-Day Cycle')}</div>
+                  <div>{cardTitle('Sealant')}{cardSub(activeBike?`${activeBike.name} · 90-Day Cycle`:'90-Day Cycle')}</div>
                   <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
                     <Badge label={!hasSealant?'NOT SET':sealOverdue?'OVERDUE':sealUrgent?'DUE SOON':'ON TRACK'} bg={sbc.bg} text={sbc.text} />
                     <Hamburger onClick={openEditSeal} />
@@ -506,7 +538,7 @@ function App(){
             <div className={flipCls('wax')}>
               <section className="flip-front" style={cardStyle}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'}}>
-                  <div>{cardTitle('Wax')}{cardSub(waxBike?`${waxBike.name} · ~${toDisp(300).toFixed(0)} ${dispUnit}`:`Distance · ~${toDisp(300).toFixed(0)} ${dispUnit}`)}</div>
+                  <div>{cardTitle('Wax')}{cardSub(activeBike?`${activeBike.name} · ~${toDisp(300).toFixed(0)} ${dispUnit}`:`Distance · ~${toDisp(300).toFixed(0)} ${dispUnit}`)}</div>
                   <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
                     <Badge label={!wd?'NOT SET':waxOverdue?'RE-WAX':waxUrgent?'DUE SOON':'ON TRACK'} bg={wbc.bg} text={wbc.text} />
                     <Hamburger onClick={openEditWax} />
@@ -532,16 +564,12 @@ function App(){
                   <NumField min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} unit={dispUnit} />
                   <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since this date<br/>= {formTotalDisp} {dispUnit} since last wax</div>
                 </div>
-                <div style={{marginBottom:'13px'}}>
+                <div style={{marginBottom:'18px'}}>
                   <div style={fieldLabel}>Method</div>
                   <div style={{display:'flex',gap:'8px'}}>
                     {['Drip','Immersion'].map(m=> <Chip key={m} active={f.method===m} label={m} onClick={()=>setForm('method',m)} />)}
                   </div>
                 </div>
-                {s.bikes.length>0 && <div style={{marginBottom:'18px'}}>
-                  <div style={fieldLabel}>Bike</div>
-                  <BikePicker bikes={s.bikes} value={f.bikeId||null} onChange={v=>setForm('bikeId',v)} />
-                </div>}
                 {editBtns(cancelFlip, saveEditWax)}
               </section>
             </div>
@@ -552,7 +580,7 @@ function App(){
             <div className={flipCls('chain')}>
               <section className="flip-front" style={cardStyle}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'}}>
-                  <div>{cardTitle('Chain Wear')}{cardSub(chainBike?`${chainBike.name} · check every ${toDisp(800).toFixed(0)} ${dispUnit}`:`Check every ${toDisp(800).toFixed(0)} ${dispUnit}`)}</div>
+                  <div>{cardTitle('Chain Wear')}{cardSub(activeBike?`${activeBike.name} · check every ${toDisp(800).toFixed(0)} ${dispUnit}`:`Check every ${toDisp(800).toFixed(0)} ${dispUnit}`)}</div>
                   <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
                     <Badge label={!cd?'NOT SET':chainDue?'CHECK WEAR':chainUrgent?'CHECK SOON':'HEALTHY'} bg={cbc.bg} text={cbc.text} />
                     <Hamburger onClick={openEditChain} />
@@ -581,10 +609,6 @@ function App(){
                   <NumField min="-20000" max="20000" value={f.km??''} onChange={e=>setForm('km',e.target.value)} unit={dispUnit} />
                   <div style={editHint}>+ {formGarminDisp} {dispUnit} ridden on Garmin since install<br/>= {formTotalDisp} {dispUnit} lifetime</div>
                 </div>
-                {s.bikes.length>0 && <div style={{marginBottom:'13px'}}>
-                  <div style={fieldLabel}>Bike</div>
-                  <BikePicker bikes={s.bikes} value={f.bikeId||null} onChange={v=>setForm('bikeId',v)} />
-                </div>}
                 <button className="replace-link" onClick={resetChain} style={{width:'100%',padding:'11px',marginBottom:'8px',borderRadius:'var(--radius)',background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontFamily:'var(--mono)',fontSize:'10.5px',letterSpacing:'.08em',textTransform:'uppercase',cursor:'pointer'}}>Replace chain · reset lifetime</button>
                 {editBtns(cancelFlip, saveEditChain)}
               </section>
@@ -639,6 +663,15 @@ function App(){
               </div>
             ))}
           </div>
+          {s.bikes.length>0 && (
+          <div style={{padding:'19px 21px',borderBottom:'1px solid var(--line)'}}>
+            <div style={settingsLabel}>Active Bike</div>
+            <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+              <Chip active={!s.activeBikeId} label="All" onClick={()=>setActiveBike(null)} />
+              {s.bikes.map(b=><Chip key={b.id} active={s.activeBikeId===b.id} label={b.name} onClick={()=>setActiveBike(b.id)} />)}
+            </div>
+          </div>
+          )}
           <div style={{padding:'19px 21px',borderBottom:'1px solid var(--line)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
               <div style={settingsLabel}>Bikes</div>
