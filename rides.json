@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-08T20:38:41.123370Z",
+  "updated": "2026-07-08T22:18:40.944710Z",
   "rides": [
     {
       "id": "17995483040",
@@ -745,6 +745,15 @@
       "km": 15.757,
       "name": "New York Cycling",
       "type": "cycling",
+      "gearId": "a201a64e62d74d92a516a24b7b22d162",
+      "gearName": "Scott Addict RC"
+    },
+    {
+      "id": "23528846840",
+      "date": "2026-07-08T19:51:41Z",
+      "km": 48.351,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking",
       "gearId": "a201a64e62d74d92a516a24b7b22d162",
       "gearName": "Scott Addict RC"
     }
