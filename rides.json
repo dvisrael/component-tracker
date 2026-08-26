@@ -1,5 +1,5 @@
 {
-  "updated": "2026-08-26T20:07:04.322229Z",
+  "updated": "2026-08-26T23:41:21.800105Z",
   "rides": [
     {
       "id": "17995483040",
@@ -798,6 +798,15 @@
       "date": "2026-08-18T15:39:21Z",
       "km": 77.578,
       "name": "Montreal Road Cycling",
+      "type": "road_biking",
+      "gearId": "a201a64e62d74d92a516a24b7b22d162",
+      "gearName": "Scott Addict RC"
+    },
+    {
+      "id": "24129941730",
+      "date": "2026-08-26T12:19:52Z",
+      "km": 66.938,
+      "name": "Englewood Road Cycling",
       "type": "road_biking",
       "gearId": "a201a64e62d74d92a516a24b7b22d162",
       "gearName": "Scott Addict RC"
