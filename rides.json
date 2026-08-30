@@ -1,5 +1,5 @@
 {
-  "updated": "2026-08-30T12:57:35.217059Z",
+  "updated": "2026-08-30T17:33:50.671715Z",
   "rides": [
     {
       "id": "17995483040",
@@ -806,6 +806,15 @@
       "id": "24129941730",
       "date": "2026-08-26T12:19:52Z",
       "km": 66.938,
+      "name": "Englewood Road Cycling",
+      "type": "road_biking",
+      "gearId": "a201a64e62d74d92a516a24b7b22d162",
+      "gearName": "Scott Addict RC"
+    },
+    {
+      "id": "24175309047",
+      "date": "2026-08-30T11:30:29Z",
+      "km": 120.065,
       "name": "Englewood Road Cycling",
       "type": "road_biking",
       "gearId": "a201a64e62d74d92a516a24b7b22d162",
